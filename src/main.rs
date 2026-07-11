@@ -5,6 +5,7 @@
 
 mod bus;
 mod cpu;
+mod instructions;
 mod opcodes;
 
 fn main() {}
