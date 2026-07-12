@@ -14,39 +14,38 @@
 - [x] step() 返回周期数
 - [x] run() 自动累加周期
 - [x] Opcodes 常量表（65C02 全部指令）
-- [x] 基础寻址模式（immediate, zeropage, zeropage_x, zeropage_y, absolute, absolute_x）
+- [x] 所有寻址模式（immediate, zeropage, zeropage_x/y, absolute, absolute_x/y, indirect, pre_indexed_x/y, post_indexed_x/y, relative）
+- [x] 栈操作 push / pop
+- [x] NOP 指令
+- [x] Load/Store 指令（LDA/LDX/LDY/STA/STX/STY/STZ）
+- [x] Transfer 指令（TAX/TAY/TXA/TYA/TSX/TXS）
+- [x] Flag 指令（CLC/CLD/CLI/CLV/SEC/SED/SEI）
+- [x] Jump/Call 指令（JMP/JSR/RTS/RTI）
 
 ## 待实现
 
-### 寻址模式
-- [ ] absolute_y
-- [ ] indirect（JMP 间接）
-- [ ] indirect_x（零页间接变址 X）
-- [ ] indirect_y（零页间接变址 Y）
-- [ ] relative（分支相对寻址）
-- [ ] accumulator（累加器模式）
+### 算术指令
+- [ ] ADC（加法，含 BCD 模式）
+- [ ] SBC（减法，含 BCD 模式）
 
-### 栈操作
-- [ ] push（入栈）
-- [ ] pop（出栈）
-
-### 指令实现
-- [ ] NOP（已完成，周期=2）
-- [ ] LDA（全部寻址模式）
-- [ ] LDX / LDY
-- [ ] STA / STX / STY / STZ
-- [ ] TAX / TAY / TXA / TYA / TSX / TXS
-- [ ] ADC / SBC（含 BCD 模式）
+### 逻辑指令
 - [ ] AND / ORA / EOR
-- [ ] CMP / CPX / CPY
-- [ ] INC / DEC / INX / INY / DEX / DEY
-- [ ] ASL / LSR / ROL / ROR
 - [ ] BIT / TRB / TSB
-- [ ] BCC / BCS / BEQ / BNE / BMI / BPL / BVC / BVS / BRA
-- [ ] JMP / JSR / RTS / RTI
-- [ ] PHA / PLA / PHP / PLP / PHX / PLX / PHY / PLY
-- [ ] CLC / CLD / CLI / CLV / SEC / SED / SEI
-- [ ] BRK（中断）
+
+### 比较指令
+- [ ] CMP / CPX / CPY
+
+### 增减指令
+- [ ] INC / DEC / INX / INY / DEX / DEY
+
+### 移位/旋转指令
+- [ ] ASL / LSR / ROL / ROR
+
+### 分支指令
+- [ ] BCC / BCS / BEQ / BNE / BMI / BPL / BVC / VVS / BRA
+
+### 中断指令
+- [ ] BRK（软件中断）
 - [ ] WAI / STP（CMOS 特有）
 
 ### 测试
