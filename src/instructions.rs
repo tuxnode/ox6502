@@ -156,6 +156,49 @@ impl<B: Bus> Cpu<B> {
             opcodes::BVC => { self.branch(!self.get_flag(FLAG_V)) }
             opcodes::BRA => { self.branch(true) }
 
+            // Logic
+            opcodes::AND_IMM => { let a = self.immediate(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 2 }
+            opcodes::AND_ZP => { let a = self.zeropage(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 3 }
+            opcodes::AND_ZPX => { let a = self.zeropage_x(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 4 }
+            opcodes::AND_ABS => { let a = self.absolute(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 4 }
+            opcodes::AND_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 4 }
+            opcodes::AND_ABSY => { let a = self.absolute_y(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 4 }
+            opcodes::AND_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 5 }
+            opcodes::AND_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 6 }
+            opcodes::AND_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 5 }
+
+            opcodes::ORA_IMM => { let a = self.immediate(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 2 }
+            opcodes::ORA_ZP => { let a = self.zeropage(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 3 }
+            opcodes::ORA_ZPX => { let a = self.zeropage_x(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 4 }
+            opcodes::ORA_ABS => { let a = self.absolute(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 4 }
+            opcodes::ORA_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 4 }
+            opcodes::ORA_ABSY => { let a = self.absolute_y(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 4 }
+            opcodes::ORA_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 5 }
+            opcodes::ORA_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 6 }
+            opcodes::ORA_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 5 }
+
+            opcodes::EOR_IMM => { let a = self.immediate(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 2 }
+            opcodes::EOR_ZP => { let a = self.zeropage(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 3 }
+            opcodes::EOR_ZPX => { let a = self.zeropage_x(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 4 }
+            opcodes::EOR_ABS => { let a = self.absolute(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 4 }
+            opcodes::EOR_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 4 }
+            opcodes::EOR_ABSY => { let a = self.absolute_y(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 4 }
+            opcodes::EOR_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 5 }
+            opcodes::EOR_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 6 }
+            opcodes::EOR_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 5 }
+
+            opcodes::BIT_IMM => { let a = self.immediate(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.set_flag(FLAG_N, v & 0x80 != 0); self.set_flag(FLAG_V, v & 0x40 != 0); 2 }
+            opcodes::BIT_ZP => { let a = self.zeropage(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.set_flag(FLAG_N, v & 0x80 != 0); self.set_flag(FLAG_V, v & 0x40 != 0); 3 }
+            opcodes::BIT_ZPX => { let a = self.zeropage_x(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.set_flag(FLAG_N, v & 0x80 != 0); self.set_flag(FLAG_V, v & 0x40 != 0); 4 }
+            opcodes::BIT_ABS => { let a = self.absolute(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.set_flag(FLAG_N, v & 0x80 != 0); self.set_flag(FLAG_V, v & 0x40 != 0); 4 }
+            opcodes::BIT_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.set_flag(FLAG_N, v & 0x80 != 0); self.set_flag(FLAG_V, v & 0x40 != 0); 4 }
+
+            opcodes::TRB_ZP => { let a = self.zeropage(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.write(a, v & !self.a); 5 }
+            opcodes::TRB_ABS => { let a = self.absolute(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.write(a, v & !self.a); 6 }
+
+            opcodes::TSB_ZP => { let a = self.zeropage(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.write(a, v | self.a); 5 }
+            opcodes::TSB_ABS => { let a = self.absolute(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.write(a, v | self.a); 6 }
+
             _ => panic!("Unknown opcode: {:#04X}", opcode),
         }
     }
