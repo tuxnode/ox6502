@@ -110,6 +110,22 @@ impl<B: Bus> Cpu<B> {
             opcodes::RTS => { let lo = self.pop() as u16; let hi = self.pop() as u16; self.pc = ((hi << 8) | lo).wrapping_add(1); 6 }
             opcodes::RTI => { self.status = self.pop(); let lo = self.pop() as u16; let hi = self.pop() as u16; self.pc = (hi << 8) | lo; 6 }
 
+            // Increment / Decrement
+            opcodes::INC_A => { self.a = self.a.wrapping_add(1); self.update_nz(self.a); 2 }
+            opcodes::INC_ZP => { let a = self.zeropage(); self.inc_mem(a); 5 }
+            opcodes::INC_ZPX => { let a = self.zeropage_x(); self.inc_mem(a); 6 }
+            opcodes::INC_ABS => { let a = self.absolute(); self.inc_mem(a); 6 }
+            opcodes::INC_ABSX => { let a = self.absolute_x(); self.inc_mem(a); 7 }
+            opcodes::DEC_A => { self.a = self.a.wrapping_sub(1); self.update_nz(self.a); 2 }
+            opcodes::DEC_ZP => { let a = self.zeropage(); self.dec_mem(a); 5 }
+            opcodes::DEC_ZPX => { let a = self.zeropage_x(); self.dec_mem(a); 6 }
+            opcodes::DEC_ABS => { let a = self.absolute(); self.dec_mem(a); 6 }
+            opcodes::DEC_ABSX => { let a = self.absolute_x(); self.dec_mem(a); 7 }
+            opcodes::INX => { self.x = self.x.wrapping_add(1); self.update_nz(self.x); 2 }
+            opcodes::INY => { self.y = self.y.wrapping_add(1); self.update_nz(self.y); 2 }
+            opcodes::DEX => { self.x = self.x.wrapping_sub(1); self.update_nz(self.x); 2 }
+            opcodes::DEY => { self.y = self.y.wrapping_sub(1); self.update_nz(self.y); 2 }
+
             _ => panic!("Unknown opcode: {:#04X}", opcode),
         }
     }
@@ -157,5 +173,19 @@ impl<B: Bus> Cpu<B> {
     // Store Zero to Memory (CMOS)
     fn stz(&mut self, addr: u16) {
         self.write(addr, 0);
+    }
+
+    // Increment Memory
+    fn inc_mem(&mut self, addr: u16) {
+        let val = self.read(addr).wrapping_add(1);
+        self.write(addr, val);
+        self.update_nz(val);
+    }
+
+    // Decrement Memory
+    fn dec_mem(&mut self, addr: u16) {
+        let val = self.read(addr).wrapping_sub(1);
+        self.write(addr, val);
+        self.update_nz(val);
     }
 }
