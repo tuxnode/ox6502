@@ -224,6 +224,27 @@ impl<B: Bus> Cpu<B> {
             opcodes::ROR_ABS => { let a = self.absolute(); self.ror_mem(a); 6 }
             opcodes::ROR_ABSX => { let a = self.absolute_x(); self.ror_mem(a); 7 }
 
+            // Arithmetic
+            opcodes::ADC_IMM => { let a = self.immediate(); let v = self.read(a); self.adc(v); 2 }
+            opcodes::ADC_ZP => { let a = self.zeropage(); let v = self.read(a); self.adc(v); 3 }
+            opcodes::ADC_ZPX => { let a = self.zeropage_x(); let v = self.read(a); self.adc(v); 4 }
+            opcodes::ADC_ABS => { let a = self.absolute(); let v = self.read(a); self.adc(v); 4 }
+            opcodes::ADC_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.adc(v); 4 }
+            opcodes::ADC_ABSY => { let a = self.absolute_y(); let v = self.read(a); self.adc(v); 4 }
+            opcodes::ADC_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.adc(v); 5 }
+            opcodes::ADC_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.adc(v); 6 }
+            opcodes::ADC_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.adc(v); 5 }
+
+            opcodes::SBC_IMM => { let a = self.immediate(); let v = self.read(a); self.sbc(v); 2 }
+            opcodes::SBC_ZP => { let a = self.zeropage(); let v = self.read(a); self.sbc(v); 3 }
+            opcodes::SBC_ZPX => { let a = self.zeropage_x(); let v = self.read(a); self.sbc(v); 4 }
+            opcodes::SBC_ABS => { let a = self.absolute(); let v = self.read(a); self.sbc(v); 4 }
+            opcodes::SBC_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.sbc(v); 4 }
+            opcodes::SBC_ABSY => { let a = self.absolute_y(); let v = self.read(a); self.sbc(v); 4 }
+            opcodes::SBC_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.sbc(v); 5 }
+            opcodes::SBC_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.sbc(v); 6 }
+            opcodes::SBC_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.sbc(v); 5 }
+
             _ => panic!("Unknown opcode: {:#04X}", opcode),
         }
     }
@@ -336,5 +357,51 @@ impl<B: Bus> Cpu<B> {
         self.write(addr, result);
         self.set_flag(FLAG_C, c);
         self.update_nz(result);
+    }
+
+    // ADC - Add with Carry
+    fn adc(&mut self, val: u8) {
+        let carry = self.get_flag(FLAG_C) as u8;
+        if self.get_flag(FLAG_D) {
+            // BCD mode
+            let mut result = (self.a & 0x0F) + (val & 0x0F) + carry;
+            if result > 0x09 { result += 0x06; }
+            result = (self.a & 0xF0) + (val & 0xF0) + result;
+            if result > 0x9F { result += 0x60; }
+            self.set_flag(FLAG_C, result > 0xFF);
+            self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) != 0) && (((self.a ^ result) & 0x80) != 0));
+            self.a = result & 0xFF;
+        } else {
+            // Binary mode
+            let result = self.a as u16 + val as u16 + carry as u16;
+            self.set_flag(FLAG_C, result > 0xFF);
+            self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) == 0) && (((self.a ^ result as u8) & 0x80) != 0));
+            self.a = result as u8;
+        }
+        self.update_nz(self.a);
+    }
+
+    // SBC - Subtract with Borrow
+    fn sbc(&mut self, val: u8) {
+        let borrow = !self.get_flag(FLAG_C) as u8;
+        if self.get_flag(FLAG_D) {
+            // BCD mode
+            let al = (self.a & 0x0F).wrapping_sub(val & 0x0F).wrapping_sub(borrow);
+            let mut adjustment = 0u8;
+            if (al & 0x10) != 0 { adjustment = 0x06; }
+            let ah = (self.a & 0xF0).wrapping_sub(val & 0xF0).wrapping_sub(al & 0x10);
+            if (ah & 0x80) != 0 && (val & 0xF0) <= (self.a & 0xF0) { adjustment |= 0x60; }
+            let result = ah.wrapping_sub(adjustment);
+            self.set_flag(FLAG_C, !((ah & 0x80) != 0 && (val & 0xF0) <= (self.a & 0xF0)));
+            self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) != 0) && (((self.a ^ result) & 0x80) != 0));
+            self.a = result;
+        } else {
+            // Binary mode
+            let result = self.a.wrapping_sub(val).wrapping_sub(borrow);
+            self.set_flag(FLAG_C, self.a as u16 >= val as u16 + borrow as u16);
+            self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) != 0) && (((self.a ^ result) & 0x80) != 0));
+            self.a = result;
+        }
+        self.update_nz(self.a);
     }
 }
