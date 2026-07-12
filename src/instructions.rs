@@ -93,6 +93,15 @@ impl<B: Bus> Cpu<B> {
             opcodes::STZ_ABS => { let a = self.absolute(); self.stz(a); 4 }
             opcodes::STZ_ABSX => { let a = self.absolute_x(); self.stz(a); 5 }
 
+            // Flags
+            opcodes::CLC => { self.set_flag(FLAG_C, false); 2 }
+            opcodes::CLD => { self.set_flag(FLAG_D, false); 2 }
+            opcodes::CLI => { self.set_flag(FLAG_I, false); 2 }
+            opcodes::CLV => { self.set_flag(FLAG_V, false); 2 }
+            opcodes::SEC => { self.set_flag(FLAG_C, true); 2 }
+            opcodes::SED => { self.set_flag(FLAG_D, true); 2 }
+            opcodes::SEI => { self.set_flag(FLAG_I, true); 2 }
+
             _ => panic!("Unknown opcode: {:#04X}", opcode),
         }
     }
