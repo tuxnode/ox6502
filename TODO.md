@@ -7,7 +7,7 @@
 - [x] CPU 结构体（寄存器 A/X/Y/SP/PC/Status）
 - [x] 状态寄存器 flag 常量（FLAG_C/Z/I/D/B/V/N）
 - [x] 构造函数 new()（读取复位向量 $FFFC）
-- [x] set_flag / get_flag / update_nz
+- [x] set_flag / get_flag / update_nz / compare
 - [x] fetch / fetch_u16
 - [x] read / write（委托给 Bus）
 - [x] 周期计数器 cycles
@@ -21,6 +21,11 @@
 - [x] Transfer 指令（TAX/TAY/TXA/TYA/TSX/TXS）
 - [x] Flag 指令（CLC/CLD/CLI/CLV/SEC/SED/SEI）
 - [x] Jump/Call 指令（JMP/JSR/RTS/RTI）
+- [x] Increment/Decrement 指令（INC/DEC/INX/INY/DEX/DEY）
+- [x] Compare 指令（CMP/CPX/CPY）
+- [x] Branch 指令（BCC/BCS/BEQ/BNE/BMI/BPL/BVC/BVS/BRA）
+- [x] Logic 指令（AND/ORA/EOR/BIT/TRB/TSB）
+- [x] Shift/Rotate 指令（ASL/LSR/ROL/ROR）
 
 ## 待实现
 
@@ -28,23 +33,7 @@
 - [ ] ADC（加法，含 BCD 模式）
 - [ ] SBC（减法，含 BCD 模式）
 
-### 逻辑指令
-- [ ] AND / ORA / EOR
-- [ ] BIT / TRB / TSB
-
-### 比较指令
-- [ ] CMP / CPX / CPY
-
-### 增减指令
-- [ ] INC / DEC / INX / INY / DEX / DEY
-
-### 移位/旋转指令
-- [ ] ASL / LSR / ROL / ROR
-
-### 分支指令
-- [ ] BCC / BCS / BEQ / BNE / BMI / BPL / BVC / VVS / BRA
-
-### 中断指令
+### 系统指令
 - [ ] BRK（软件中断）
 - [ ] WAI / STP（CMOS 特有）
 
