@@ -199,6 +199,31 @@ impl<B: Bus> Cpu<B> {
             opcodes::TSB_ZP => { let a = self.zeropage(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.write(a, v | self.a); 5 }
             opcodes::TSB_ABS => { let a = self.absolute(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.write(a, v | self.a); 6 }
 
+            // Shift / Rotate
+            opcodes::ASL_A => { let c = self.a & 0x80 != 0; self.a <<= 1; self.set_flag(FLAG_C, c); self.update_nz(self.a); 2 }
+            opcodes::ASL_ZP => { let a = self.zeropage(); self.asl_mem(a); 5 }
+            opcodes::ASL_ZPX => { let a = self.zeropage_x(); self.asl_mem(a); 6 }
+            opcodes::ASL_ABS => { let a = self.absolute(); self.asl_mem(a); 6 }
+            opcodes::ASL_ABSX => { let a = self.absolute_x(); self.asl_mem(a); 7 }
+
+            opcodes::LSR_A => { let c = self.a & 0x01 != 0; self.a >>= 1; self.set_flag(FLAG_C, c); self.update_nz(self.a); 2 }
+            opcodes::LSR_ZP => { let a = self.zeropage(); self.lsr_mem(a); 5 }
+            opcodes::LSR_ZPX => { let a = self.zeropage_x(); self.lsr_mem(a); 6 }
+            opcodes::LSR_ABS => { let a = self.absolute(); self.lsr_mem(a); 6 }
+            opcodes::LSR_ABSX => { let a = self.absolute_x(); self.lsr_mem(a); 7 }
+
+            opcodes::ROL_A => { let c = self.a & 0x80 != 0; self.a = (self.a << 1) | (self.get_flag(FLAG_C) as u8); self.set_flag(FLAG_C, c); self.update_nz(self.a); 2 }
+            opcodes::ROL_ZP => { let a = self.zeropage(); self.rol_mem(a); 5 }
+            opcodes::ROL_ZPX => { let a = self.zeropage_x(); self.rol_mem(a); 6 }
+            opcodes::ROL_ABS => { let a = self.absolute(); self.rol_mem(a); 6 }
+            opcodes::ROL_ABSX => { let a = self.absolute_x(); self.rol_mem(a); 7 }
+
+            opcodes::ROR_A => { let c = self.a & 0x01 != 0; self.a = (self.a >> 1) | (self.get_flag(FLAG_C) as u8) * 0x80; self.set_flag(FLAG_C, c); self.update_nz(self.a); 2 }
+            opcodes::ROR_ZP => { let a = self.zeropage(); self.ror_mem(a); 5 }
+            opcodes::ROR_ZPX => { let a = self.zeropage_x(); self.ror_mem(a); 6 }
+            opcodes::ROR_ABS => { let a = self.absolute(); self.ror_mem(a); 6 }
+            opcodes::ROR_ABSX => { let a = self.absolute_x(); self.ror_mem(a); 7 }
+
             _ => panic!("Unknown opcode: {:#04X}", opcode),
         }
     }
@@ -271,5 +296,45 @@ impl<B: Bus> Cpu<B> {
         } else {
             2
         }
+    }
+
+    // ASL Memory
+    fn asl_mem(&mut self, addr: u16) {
+        let val = self.read(addr);
+        let c = val & 0x80 != 0;
+        let result = val << 1;
+        self.write(addr, result);
+        self.set_flag(FLAG_C, c);
+        self.update_nz(result);
+    }
+
+    // LSR Memory
+    fn lsr_mem(&mut self, addr: u16) {
+        let val = self.read(addr);
+        let c = val & 0x01 != 0;
+        let result = val >> 1;
+        self.write(addr, result);
+        self.set_flag(FLAG_C, c);
+        self.update_nz(result);
+    }
+
+    // ROL Memory
+    fn rol_mem(&mut self, addr: u16) {
+        let val = self.read(addr);
+        let c = val & 0x80 != 0;
+        let result = (val << 1) | (self.get_flag(FLAG_C) as u8);
+        self.write(addr, result);
+        self.set_flag(FLAG_C, c);
+        self.update_nz(result);
+    }
+
+    // ROR Memory
+    fn ror_mem(&mut self, addr: u16) {
+        let val = self.read(addr);
+        let c = val & 0x01 != 0;
+        let result = (val >> 1) | (self.get_flag(FLAG_C) as u8) * 0x80;
+        self.write(addr, result);
+        self.set_flag(FLAG_C, c);
+        self.update_nz(result);
     }
 }
