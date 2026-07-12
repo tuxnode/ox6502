@@ -1,5 +1,10 @@
-// 65C02 Instructions Implement
-// Reference: W65C02S Programming Manual
+// 65C02 Instructions Implementation
+//
+// References:
+// - W65C02S Datasheet: https://www.westerndesigncenter.com/wdc/documentation/w65c02s.pdf
+// - W65C02S Programming Manual: https://www.westerndesigncenter.com/wdc/documentation/w65c02-programming-manual.pdf
+// - Obelisk 6502 Reference: https://www.obelisk.me.uk/6502/reference.html
+// - 6502.org Tutorials: https://www.6502.org/tutorials/
 
 /*
 Status Registers Layout:
@@ -19,5 +24,25 @@ use crate::cpu::Cpu;
 use crate::opcodes;
 
 impl<B: Bus> Cpu<B> {
-    pub fn step(&mut self) {}
+    pub fn step(&mut self) -> u8 {
+        let opcode = self.fetch();
+        match opcode {
+            opcodes::NOP => 2,
+
+            _ => panic!("Unknown opcode: {:#04X}", opcode),
+        }
+    }
+
+    pub fn run(&mut self) {
+        loop {
+            let cycles = self.step();
+            self.cycles += cycles as u64;
+        }
+    }
+
+    // Load Accumulator with Memory
+    fn lda(&mut self, addr: u16) {
+        self.a = self.read(addr);
+        self.update_nz(self.a);
+    }
 }

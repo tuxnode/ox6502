@@ -15,6 +15,7 @@ pub struct Cpu<B: Bus> {
     pub pc: u16,
     pub status: u8, // Processor Status Register (P)
 
+    pub(crate) cycles: u64,
     bus: B,
 }
 
@@ -27,7 +28,8 @@ impl<B: Bus> Cpu<B> {
             sp: 0xFD,
             status: 0,
             pc: 0,
-            bus: bus,
+            cycles: 0,
+            bus,
         };
         cpu.pc = cpu.fetch_u16();
         cpu.set_flag(FLAG_I, true);
