@@ -31,11 +31,11 @@ impl<B: Bus> Cpu<B> {
 
             // Stack
             opcodes::PHA => { self.push(self.a); 3 }
-            opcodes::PHP => { self.push(self.status); 3 }
+            opcodes::PHP => { self.push(self.status | FLAG_B | 0x20); 3 }
             opcodes::PHX => { self.push(self.x); 3 }
             opcodes::PHY => { self.push(self.y); 3 }
             opcodes::PLA => { self.a = self.pop(); self.update_nz(self.a); 4 }
-            opcodes::PLP => { self.status = self.pop(); 4 }
+            opcodes::PLP => { self.status = (self.pop() & 0xEF) | 0x20; 4 }
             opcodes::PLX => { self.x = self.pop(); self.update_nz(self.x); 4 }
             opcodes::PLY => { self.y = self.pop(); self.update_nz(self.y); 4 }
 
@@ -155,6 +155,19 @@ impl<B: Bus> Cpu<B> {
             opcodes::BVS => { self.branch(self.get_flag(FLAG_V)) }
             opcodes::BVC => { self.branch(!self.get_flag(FLAG_V)) }
             opcodes::BRA => { self.branch(true) }
+
+            // System
+            opcodes::BRK => {
+                self.pc = self.pc.wrapping_add(2); // Skip padding byte
+                self.push((self.pc >> 8) as u8);
+                self.push(self.pc as u8);
+                self.push(self.status | FLAG_B);
+                self.set_flag(FLAG_I, true);
+                let lo = self.read(0xFFFE) as u16;
+                let hi = self.read(0xFFFF) as u16;
+                self.pc = (hi << 8) | lo;
+                7
+            }
 
             // Logic
             opcodes::AND_IMM => { let a = self.immediate(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 2 }
