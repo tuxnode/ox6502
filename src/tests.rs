@@ -678,33 +678,28 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Bug: RTS return address
     fn test_jsr_rts() {
         let mut bus = TestBus::new();
         bus.load_program(&[
-            JSR, 0x10, 0x04, // JSR $0410
-            NOP,             // $0403
-            NOP,
-            // at $0410:
-            RTS,
+            JSR, 0x04, 0x04, // JSR $0404
+            NOP,             // $0403: return here
+            RTS,             // $0404
         ], 0x0400);
         bus.memory[0xFFFC] = 0x00;
         bus.memory[0xFFFD] = 0x04;
         let mut cpu = Cpu::new(bus);
         
         let sp_before = cpu.sp;
-        cpu.step(); // JSR $0410
-        assert_eq!(cpu.pc, 0x0410);
+        cpu.step(); // JSR $0404
+        assert_eq!(cpu.pc, 0x0404);
         assert_eq!(cpu.sp, sp_before - 2);
         
         cpu.step(); // RTS
-        // RTS pops return address and adds 1
         assert_eq!(cpu.pc, 0x0403);
         assert_eq!(cpu.sp, sp_before);
     }
 
     #[test]
-    #[ignore] // Bug: JSR return address push
     fn test_jsr_pushes_correct_return_address() {
         let mut bus = TestBus::new();
         bus.load_program(&[
@@ -719,11 +714,63 @@ mod tests {
         let mut cpu = Cpu::new(bus);
         
         cpu.step(); // JSR $0410
-        // Stack should contain return address $0402 (PC after instruction - 1)
-        let hi = cpu.read(0x01FF);
-        let lo = cpu.read(0x01FE);
+        // JSR pushes (PC-1) = $0402 (return addr - 1)
+        // Stack: SP=$FC has lo byte, SP=$FD has hi byte
+        let hi = cpu.read(0x01FD);
+        let lo = cpu.read(0x01FC);
         let return_addr = (hi as u16) << 8 | lo as u16;
         assert_eq!(return_addr, 0x0402);
+    }
+
+    #[test]
+    fn test_jsr_nested() {
+        let mut bus = TestBus::new();
+        // Layout:
+        // $0400: JSR $0408 (3 bytes)
+        // $0403: LDA #$11 (2 bytes)
+        // $0405: JMP $0411 (3 bytes)
+        // $0408: LDA #$22 (2 bytes)
+        // $040A: JSR $040E (3 bytes)
+        // $040D: RTS (1 byte)
+        // $040E: LDA #$33 (2 bytes)
+        // $0410: RTS (1 byte)
+        // $0411: NOP (1 byte)
+        bus.load_program(&[
+            JSR, 0x08, 0x04, // $0400: JSR $0408
+            LDA_IMM, 0x11,   // $0403
+            JMP_ABS, 0x11, 0x04, // $0405: JMP $0411
+            LDA_IMM, 0x22,   // $0408
+            JSR, 0x0E, 0x04, // $040A: JSR $040E
+            RTS,             // $040D
+            LDA_IMM, 0x33,   // $040E
+            RTS,             // $0410
+            NOP,             // $0411
+        ], 0x0400);
+        bus.memory[0xFFFC] = 0x00;
+        bus.memory[0xFFFD] = 0x04;
+        let mut cpu = Cpu::new(bus);
+        
+        cpu.step(); // JSR $0408
+        assert_eq!(cpu.pc, 0x0408);
+        
+        cpu.step(); // LDA #$22
+        assert_eq!(cpu.a, 0x22);
+        
+        cpu.step(); // JSR $040E
+        assert_eq!(cpu.pc, 0x040E);
+        
+        cpu.step(); // LDA #$33
+        assert_eq!(cpu.a, 0x33);
+        
+        cpu.step(); // RTS -> $040D + 1 = $040E? No, RTS returns to pushed addr + 1
+        // JSR at $040A pushed $040C, RTS returns to $040D
+        assert_eq!(cpu.pc, 0x040D);
+        
+        cpu.step(); // RTS -> returns to $0403
+        assert_eq!(cpu.pc, 0x0403);
+        
+        cpu.step(); // LDA #$11
+        assert_eq!(cpu.a, 0x11);
     }
 
     // ==================== Logic Tests ====================
@@ -1249,7 +1296,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Bug: V flag logic in ADC overflow check
     fn test_adc_overflow_clear() {
         let mut bus = TestBus::new();
         bus.load_program(&[
@@ -1265,9 +1311,9 @@ mod tests {
         cpu.step(); // LDA #$80
         cpu.step(); // ADC #$80
         assert_eq!(cpu.a, 0x00);
-        // $80 + $80 = $100, unsigned: C=1, signed: V=0 (both negative, result positive = no overflow)
         assert!(cpu.get_flag(FLAG_C));
-        assert!(!cpu.get_flag(FLAG_V));
+        // $80 + $80 = $100: both negative, result positive = signed overflow
+        assert!(cpu.get_flag(FLAG_V));
     }
 
     // ==================== ADC/SBC Binary Mode Tests ====================
@@ -1338,15 +1384,16 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Bug: backward branch offset calculation
     fn test_branch_loop() {
         let mut bus = TestBus::new();
-        // Loop: X = 5, decrement until 0
+        // $0400: LDX #$05 (2 bytes)
+        // $0402: DEX (1 byte) - loop target
+        // $0403: BNE $FD (2 bytes) - $FD = -3 signed, branch back to DEX
+        // $0405: NOP (1 byte)
         bus.load_program(&[
             LDX_IMM, 0x05,
-            // loop at $0402:
             DEX,
-            BNE, 0xFC, // -4 = branch back to DEX
+            BNE, 0xFD, // -3 signed, branch back to DEX at $0402
             NOP,
         ], 0x0400);
         bus.memory[0xFFFC] = 0x00;
@@ -1354,16 +1401,17 @@ mod tests {
         let mut cpu = Cpu::new(bus);
         
         cpu.step(); // LDX #$05
-        // Execute loop 5 times
-        for _ in 0..5 {
+        // Loop until X=0
+        loop {
             cpu.step(); // DEX
-            cpu.step(); // BNE (taken)
+            let pc_before = cpu.pc;
+            cpu.step(); // BNE
+            if cpu.pc == pc_before + 2 {
+                break; // BNE not taken, we're done
+            }
         }
-        cpu.step(); // DEX (X becomes 0)
-        cpu.step(); // BNE (not taken)
         assert_eq!(cpu.x, 0x00);
-        // After loop: DEX at $0402, BNE at $0403 (not taken), NOP at $0406
-        assert_eq!(cpu.pc, 0x0406);
+        assert_eq!(cpu.pc, 0x0405);
     }
 
     #[test]
@@ -1404,47 +1452,5 @@ mod tests {
         
         cpu.step(); // PLA -> $AA
         assert_eq!(cpu.a, 0xAA);
-    }
-
-    #[test]
-    #[ignore] // Bug: nested JSR/RTS
-    fn test_jsr_nested() {
-        let mut bus = TestBus::new();
-        // JSR to subroutine that calls another subroutine
-        bus.load_program(&[
-            // $0400:
-            JSR, 0x20, 0x04, // JSR $0420
-            LDA_IMM, 0x11,
-            JMP_ABS, 0x40, 0x04, // Jump to $0440 (end)
-            // $0420:
-            LDA_IMM, 0x22,
-            JSR, 0x30, 0x04, // JSR $0430
-            RTS,
-            // $0430:
-            LDA_IMM, 0x33,
-            RTS,
-            // $0440:
-            NOP,
-        ], 0x0400);
-        bus.memory[0xFFFC] = 0x00;
-        bus.memory[0xFFFD] = 0x04;
-        let mut cpu = Cpu::new(bus);
-        
-        cpu.step(); // JSR $0420
-        assert_eq!(cpu.pc, 0x0420);
-        
-        cpu.step(); // LDA #$22
-        assert_eq!(cpu.a, 0x22);
-        
-        cpu.step(); // JSR $0430
-        assert_eq!(cpu.pc, 0x0430);
-        
-        cpu.step(); // LDA #$33
-        assert_eq!(cpu.a, 0x33);
-        
-        cpu.step(); // RTS -> back to $0426
-        cpu.step(); // RTS -> back to $0403
-        cpu.step(); // LDA #$11
-        assert_eq!(cpu.a, 0x11);
     }
 }
