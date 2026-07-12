@@ -15,7 +15,7 @@ pub struct Cpu<B: Bus> {
     pub pc: u16,
     pub status: u8, // Processor Status Register (P)
 
-    pub(crate) cycles: u64,
+    pub cycles: u64,
     bus: B,
 }
 
@@ -27,11 +27,11 @@ impl<B: Bus> Cpu<B> {
             y: 0,
             sp: 0xFD,
             status: 0,
-            pc: 0,
+            pc: 0xFFFC, // Reset vector address
             cycles: 0,
             bus,
         };
-        cpu.pc = cpu.fetch_u16();
+        cpu.pc = cpu.fetch_u16(); // Read reset vector from $FFFC-$FFFD
         cpu.set_flag(FLAG_I, true);
         cpu
     }
@@ -44,7 +44,7 @@ impl<B: Bus> Cpu<B> {
         }
     }
 
-    pub(crate) fn get_flag(&self, flag: u8) -> bool {
+    pub fn get_flag(&self, flag: u8) -> bool {
         self.status & flag != 0
     }
 
@@ -64,7 +64,7 @@ impl<B: Bus> Cpu<B> {
         (hi << 8) | lo
     }
 
-    pub(crate) fn read(&mut self, addr: u16) -> u8 {
+    pub fn read(&mut self, addr: u16) -> u8 {
         self.bus.read(addr)
     }
 

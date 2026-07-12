@@ -3,16 +3,8 @@
  * Integration Testing Kit: https://github.com/Klaus2m5/6502_65C02_functional_tests
  */
 
-mod addressing;
-mod bus;
-mod cpu;
-mod instructions;
-mod opcodes;
-#[cfg(test)]
-mod tests;
-
-use bus::simple::SimpleBus;
-use cpu::Cpu;
+use ox6502::bus::simple::SimpleBus;
+use ox6502::cpu::Cpu;
 use std::fs;
 
 fn main() {
@@ -45,7 +37,6 @@ fn main() {
         cycles += step_cycles as u64;
         cpu.cycles = cycles;
 
-        // 检测是否卡在陷阱循环中（连续3次相同PC）
         if cpu.pc == pc_before {
             trap_count += 1;
             traps.push((cpu.pc, cycles));
@@ -53,12 +44,10 @@ fn main() {
                 println!("\n=== TOO MANY TRAPS, STOPPING ===");
                 break;
             }
-            // 跳过陷阱指令 (2 bytes)
             cpu.pc = cpu.pc.wrapping_add(2);
             continue;
         }
 
-        // 测试通过条件
         if cpu.pc == 0x0400 {
             println!("\n=== TEST PASSED ===");
             println!("Cycles: {}", cycles);
