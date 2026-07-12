@@ -126,6 +126,25 @@ impl<B: Bus> Cpu<B> {
             opcodes::DEX => { self.x = self.x.wrapping_sub(1); self.update_nz(self.x); 2 }
             opcodes::DEY => { self.y = self.y.wrapping_sub(1); self.update_nz(self.y); 2 }
 
+            // Compare
+            opcodes::CMP_IMM => { let a = self.immediate(); let v = self.read(a); self.compare(self.a, v); 2 }
+            opcodes::CMP_ZP => { let a = self.zeropage(); let v = self.read(a); self.compare(self.a, v); 3 }
+            opcodes::CMP_ZPX => { let a = self.zeropage_x(); let v = self.read(a); self.compare(self.a, v); 4 }
+            opcodes::CMP_ABS => { let a = self.absolute(); let v = self.read(a); self.compare(self.a, v); 4 }
+            opcodes::CMP_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.compare(self.a, v); 4 }
+            opcodes::CMP_ABSY => { let a = self.absolute_y(); let v = self.read(a); self.compare(self.a, v); 4 }
+            opcodes::CMP_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.compare(self.a, v); 5 }
+            opcodes::CMP_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.compare(self.a, v); 6 }
+            opcodes::CMP_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.compare(self.a, v); 5 }
+
+            opcodes::CPX_IMM => { let a = self.immediate(); let v = self.read(a); self.compare(self.x, v); 2 }
+            opcodes::CPX_ZP => { let a = self.zeropage(); let v = self.read(a); self.compare(self.x, v); 3 }
+            opcodes::CPX_ABS => { let a = self.absolute(); let v = self.read(a); self.compare(self.x, v); 4 }
+
+            opcodes::CPY_IMM => { let a = self.immediate(); let v = self.read(a); self.compare(self.y, v); 2 }
+            opcodes::CPY_ZP => { let a = self.zeropage(); let v = self.read(a); self.compare(self.y, v); 3 }
+            opcodes::CPY_ABS => { let a = self.absolute(); let v = self.read(a); self.compare(self.y, v); 4 }
+
             _ => panic!("Unknown opcode: {:#04X}", opcode),
         }
     }

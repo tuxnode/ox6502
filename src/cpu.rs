@@ -5,7 +5,7 @@
 // - W65C02S Programming Manual：https://www.westerndesigncenter.com/wdc/documentation/w65c02-programming-manual.pdf
 
 use crate::bus::Bus;
-use crate::instructions::{FLAG_I, FLAG_N, FLAG_Z};
+use crate::instructions::{FLAG_C, FLAG_I, FLAG_N, FLAG_Z};
 
 pub struct Cpu<B: Bus> {
     pub a: u8, // Accumulator Register
@@ -83,5 +83,11 @@ impl<B: Bus> Cpu<B> {
         self.sp = self.sp.wrapping_add(1);
         let addr = 0x0100 | self.sp as u16;
         self.read(addr)
+    }
+
+    pub(crate) fn compare(&mut self, reg: u8, val: u8) {
+        let result = reg.wrapping_sub(val);
+        self.set_flag(FLAG_C, reg >= val);
+        self.update_nz(result);
     }
 }
