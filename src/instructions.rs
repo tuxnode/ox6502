@@ -102,6 +102,14 @@ impl<B: Bus> Cpu<B> {
             opcodes::SED => { self.set_flag(FLAG_D, true); 2 }
             opcodes::SEI => { self.set_flag(FLAG_I, true); 2 }
 
+            // Jump
+            opcodes::JMP_ABS => { self.pc = self.absolute(); 3 }
+            opcodes::JMP_IND => { self.pc = self.indirect(); 6 }
+            opcodes::JMP_INDX => { self.pc = self.pre_indexed_x(); 6 }
+            opcodes::JSR => { let addr = self.absolute(); let pc = self.pc.wrapping_sub(1); self.push((pc >> 8) as u8); self.push(pc as u8); self.pc = addr; 6 }
+            opcodes::RTS => { let lo = self.pop() as u16; let hi = self.pop() as u16; self.pc = ((hi << 8) | lo).wrapping_add(1); 6 }
+            opcodes::RTI => { self.status = self.pop(); let lo = self.pop() as u16; let hi = self.pop() as u16; self.pc = (hi << 8) | lo; 6 }
+
             _ => panic!("Unknown opcode: {:#04X}", opcode),
         }
     }
