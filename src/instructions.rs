@@ -145,6 +145,17 @@ impl<B: Bus> Cpu<B> {
             opcodes::CPY_ZP => { let a = self.zeropage(); let v = self.read(a); self.compare(self.y, v); 3 }
             opcodes::CPY_ABS => { let a = self.absolute(); let v = self.read(a); self.compare(self.y, v); 4 }
 
+            // Branch
+            opcodes::BCC => { self.branch(!self.get_flag(FLAG_C)) }
+            opcodes::BCS => { self.branch(self.get_flag(FLAG_C)) }
+            opcodes::BEQ => { self.branch(self.get_flag(FLAG_Z)) }
+            opcodes::BNE => { self.branch(!self.get_flag(FLAG_Z)) }
+            opcodes::BMI => { self.branch(self.get_flag(FLAG_N)) }
+            opcodes::BPL => { self.branch(!self.get_flag(FLAG_N)) }
+            opcodes::BVS => { self.branch(self.get_flag(FLAG_V)) }
+            opcodes::BVC => { self.branch(!self.get_flag(FLAG_V)) }
+            opcodes::BRA => { self.branch(true) }
+
             _ => panic!("Unknown opcode: {:#04X}", opcode),
         }
     }
@@ -206,5 +217,16 @@ impl<B: Bus> Cpu<B> {
         let val = self.read(addr).wrapping_sub(1);
         self.write(addr, val);
         self.update_nz(val);
+    }
+
+    // Branch Helper
+    fn branch(&mut self, condition: bool) -> u8 {
+        let offset = self.fetch() as i8;
+        if condition {
+            self.pc = self.pc.wrapping_add(offset as u16);
+            3
+        } else {
+            2
+        }
     }
 }
