@@ -71,4 +71,17 @@ impl<B: Bus> Cpu<B> {
     pub(crate) fn write(&mut self, addr: u16, val: u8) {
         self.bus.write(addr, val);
     }
+
+    // Basic Instructions Dependences
+    pub(crate) fn push(&mut self, val: u8) {
+        let addr = 0x0100 | self.sp as u16;
+        self.write(addr, val);
+        self.sp = self.sp.wrapping_sub(1);
+    }
+
+    pub(crate) fn pop(&mut self) -> u8 {
+        self.sp = self.sp.wrapping_add(1);
+        let addr = 0x0100 | self.sp as u16;
+        self.read(addr)
+    }
 }

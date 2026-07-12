@@ -29,6 +29,44 @@ impl<B: Bus> Cpu<B> {
         match opcode {
             opcodes::NOP => 2,
 
+            //Stack
+            opcodes::PHA => {
+                self.push(self.a);
+                3
+            }
+            opcodes::PHP => {
+                self.push(self.status);
+                3
+            }
+            opcodes::PHX => {
+                self.push(self.x);
+                3
+            }
+            opcodes::PHY => {
+                self.push(self.y);
+                3
+            }
+
+            opcodes::PLA => {
+                self.a = self.pop();
+                self.update_nz(self.a);
+                4
+            }
+            opcodes::PLP => {
+                self.status = self.pop();
+                4
+            }
+            opcodes::PLX => {
+                self.x = self.pop();
+                self.update_nz(self.x);
+                4
+            }
+            opcodes::PLY => {
+                self.y = self.pop();
+                self.update_nz(self.y);
+                4
+            }
+
             _ => panic!("Unknown opcode: {:#04X}", opcode),
         }
     }
