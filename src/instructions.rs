@@ -67,6 +67,37 @@ impl<B: Bus> Cpu<B> {
                 4
             }
 
+            // Transfer
+            opcodes::TAX => {
+                self.x = self.a;
+                self.update_nz(self.x);
+                2
+            }
+            opcodes::TAY => {
+                self.y = self.a;
+                self.update_nz(self.y);
+                2
+            }
+            opcodes::TXA => {
+                self.a = self.x;
+                self.update_nz(self.a);
+                2
+            }
+            opcodes::TYA => {
+                self.a = self.y;
+                self.update_nz(self.a);
+                2
+            }
+            opcodes::TSX => {
+                self.x = self.sp;
+                self.update_nz(self.x);
+                2
+            }
+            opcodes::TXS => {
+                self.sp = self.x;
+                2
+            }
+
             _ => panic!("Unknown opcode: {:#04X}", opcode),
         }
     }
