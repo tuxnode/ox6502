@@ -26,22 +26,19 @@
 - [x] Branch 指令（BCC/BCS/BEQ/BNE/BMI/BPL/BVC/BVS/BRA）
 - [x] Logic 指令（AND/ORA/EOR/BIT/TRB/TSB）
 - [x] Shift/Rotate 指令（ASL/LSR/ROL/ROR）
+- [x] ADC（加法，含 BCD 模式）
+- [x] SBC（减法，含 BCD 模式）
+- [x] BRK（软件中断）
+- [x] Klaus2m5 功能测试 ROM（6502_functional_test.bin）
 
 ## 待实现
 
-### 算术指令
-- [ ] ADC（加法，含 BCD 模式）
-- [ ] SBC（减法，含 BCD 模式）
-
 ### 系统指令
-- [ ] BRK（软件中断）
 - [ ] WAI / STP（CMOS 特有）
 
-### 测试
-- [ ] 加载 Klaus2m5 功能测试 ROM
-- [ ] 运行 6502_functional_test
-- [ ] 运行 65C02_extended_opcodes_test
-- [ ] 运行 6502_decimal_test
+### 测试 ROM
+- [ ] 65C02_extended_opcodes_test.bin（尚未加入 tests/roms/）
+- [ ] 6502_decimal_test.bin（尚未加入 tests/roms/）
 
 ### 精确周期模拟
 - [ ] 跨页检测（absolute_x/y 跨页 +1 周期）
