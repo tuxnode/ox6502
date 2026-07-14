@@ -161,7 +161,7 @@ impl<B: Bus> Cpu<B> {
                 self.pc = self.pc.wrapping_add(2); // Skip padding byte
                 self.push((self.pc >> 8) as u8);
                 self.push(self.pc as u8);
-                self.push(self.status | FLAG_B);
+                self.push(self.status | FLAG_B | 0x20);
                 self.set_flag(FLAG_I, true);
                 let lo = self.read(0xFFFE) as u16;
                 let hi = self.read(0xFFFF) as u16;
