@@ -8,13 +8,22 @@ use ox6502::cpu::Cpu;
 use std::fs;
 
 fn main() {
-    let test_file = std::env::args().nth(1).unwrap_or_else(|| {
-        println!("Usage: ox6502 <test.bin>");
-        println!("Available tests:");
-        println!("  tests/roms/6502_functional_test.bin");
-        println!("  tests/roms/65C02_extended_opcodes_test.bin");
-        std::process::exit(1);
+    let args: Vec<String> = std::env::args().collect();
+    let debug = args.iter().any(|a| a == "--debug");
+    let test_file = args.get(1).filter(|a| !a.starts_with('-')).or_else(|| {
+        args.iter().skip(1).find(|a| !a.starts_with('-'))
     });
+
+    let test_file = match test_file {
+        Some(f) => f.clone(),
+        None => {
+            println!("Usage: ox6502 <test.bin> [--debug]");
+            println!("Available tests:");
+            println!("  tests/roms/6502_functional_test.bin");
+            println!("  tests/roms/65C02_extended_opcodes_test.bin");
+            std::process::exit(1);
+        }
+    };
 
     let rom = fs::read(&test_file).expect("Failed to read test ROM");
     println!("Loaded {} bytes from {}", rom.len(), test_file);
@@ -24,6 +33,12 @@ fn main() {
 
     let mut cpu = Cpu::new(bus);
     cpu.pc = 0x0400;
+
+    if debug {
+        ox6502::monitor::run(&mut cpu);
+        return;
+    }
+
     println!("CPU initialized. Starting execution at $0400...");
 
     let mut cycles: u64 = 0;
