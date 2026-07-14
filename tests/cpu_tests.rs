@@ -1361,6 +1361,26 @@ fn test_sbc_binary_mode() {
 // ==================== Complex Integration Tests ====================
 
 #[test]
+fn test_sbc_binary_minimal() {
+    let mut bus = TestBus::new();
+    // CLD; SEC; LDA #$99; SBC #$00
+    bus.load_program(&[CLD, SEC, LDA_IMM, 0x99, SBC_IMM, 0x00], 0x0400);
+    bus.memory[0xFFFC] = 0x00;
+    bus.memory[0xFFFD] = 0x04;
+    let mut cpu = Cpu::new(bus);
+
+    cpu.step(); // CLD
+    cpu.step(); // SEC
+    cpu.step(); // LDA #$99
+    assert_eq!(cpu.a, 0x99);
+    assert!(!cpu.get_flag(FLAG_D), "D should be 0");
+    assert!(cpu.get_flag(FLAG_C), "C should be 1");
+    cpu.step(); // SBC #$00
+    assert_eq!(cpu.a, 0x99, "99-00=99, got {:02X}", cpu.a);
+    assert!(cpu.get_flag(FLAG_C), "no borrow expected");
+}
+
+#[test]
 fn test_lda_sta_roundtrip() {
     let mut bus = TestBus::new();
     bus.load_program(&[

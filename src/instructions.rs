@@ -108,7 +108,7 @@ impl<B: Bus> Cpu<B> {
             opcodes::JMP_INDX => { self.pc = self.pre_indexed_x(); 6 }
             opcodes::JSR => { let addr = self.absolute(); let pc = self.pc.wrapping_sub(1); self.push((pc >> 8) as u8); self.push(pc as u8); self.pc = addr; 6 }
             opcodes::RTS => { let lo = self.pop() as u16; let hi = self.pop() as u16; self.pc = ((hi << 8) | lo).wrapping_add(1); 6 }
-            opcodes::RTI => { self.status = self.pop(); let lo = self.pop() as u16; let hi = self.pop() as u16; self.pc = (hi << 8) | lo; 6 }
+            opcodes::RTI => { self.status = (self.pop() & 0xEF) | 0x20; let lo = self.pop() as u16; let hi = self.pop() as u16; self.pc = (hi << 8) | lo; 6 }
 
             // Increment / Decrement
             opcodes::INC_A => { self.a = self.a.wrapping_add(1); self.update_nz(self.a); 2 }
@@ -158,7 +158,7 @@ impl<B: Bus> Cpu<B> {
 
             // System
             opcodes::BRK => {
-                self.pc = self.pc.wrapping_add(2); // Skip padding byte
+                self.pc = self.pc.wrapping_add(1); // Skip padding byte
                 self.push((self.pc >> 8) as u8);
                 self.push(self.pc as u8);
                 self.push(self.status | FLAG_B | 0x20);
@@ -373,48 +373,25 @@ impl<B: Bus> Cpu<B> {
     }
 
     // ADC - Add with Carry
+    // NES 6502 (NMOS): D flag has no effect, always binary
     fn adc(&mut self, val: u8) {
-        let carry = self.get_flag(FLAG_C) as u8;
-        if self.get_flag(FLAG_D) {
-            // BCD mode
-            let mut result = (self.a & 0x0F) + (val & 0x0F) + carry;
-            if result > 0x09 { result += 0x06; }
-            result = (self.a & 0xF0) + (val & 0xF0) + result;
-            if result > 0x9F { result += 0x60; }
-            self.set_flag(FLAG_C, result > 0xFF);
-            self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) != 0) && (((self.a ^ result) & 0x80) != 0));
-            self.a = result & 0xFF;
-        } else {
-            // Binary mode
-            let result = self.a as u16 + val as u16 + carry as u16;
-            self.set_flag(FLAG_C, result > 0xFF);
-            self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) == 0) && (((self.a ^ result as u8) & 0x80) != 0));
-            self.a = result as u8;
-        }
+        let carry = self.get_flag(FLAG_C) as u16;
+        let result = (self.a as u16) + (val as u16) + carry;
+        self.set_flag(FLAG_C, result > 0xFF);
+        self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) == 0) && (((self.a ^ result as u8) & 0x80) != 0));
+        self.a = result as u8;
         self.update_nz(self.a);
     }
 
     // SBC - Subtract with Borrow
+    // NES 6502 (NMOS): D flag has no effect, always binary
     fn sbc(&mut self, val: u8) {
-        let borrow = !self.get_flag(FLAG_C) as u8;
-        if self.get_flag(FLAG_D) {
-            // BCD mode
-            let al = (self.a & 0x0F).wrapping_sub(val & 0x0F).wrapping_sub(borrow);
-            let mut adjustment = 0u8;
-            if (al & 0x10) != 0 { adjustment = 0x06; }
-            let ah = (self.a & 0xF0).wrapping_sub(val & 0xF0).wrapping_sub(al & 0x10);
-            if (ah & 0x80) != 0 && (val & 0xF0) <= (self.a & 0xF0) { adjustment |= 0x60; }
-            let result = ah.wrapping_sub(adjustment);
-            self.set_flag(FLAG_C, !((ah & 0x80) != 0 && (val & 0xF0) <= (self.a & 0xF0)));
-            self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) != 0) && (((self.a ^ result) & 0x80) != 0));
-            self.a = result;
-        } else {
-            // Binary mode
-            let result = self.a.wrapping_sub(val).wrapping_sub(borrow);
-            self.set_flag(FLAG_C, self.a as u16 >= val as u16 + borrow as u16);
-            self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) != 0) && (((self.a ^ result) & 0x80) != 0));
-            self.a = result;
-        }
+        let carry = self.get_flag(FLAG_C);
+        let borrow = !carry as u16;
+        let result = (self.a as u16).wrapping_sub(val as u16).wrapping_sub(borrow);
+        self.set_flag(FLAG_C, result <= 0xFF);
+        self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) != 0) && (((self.a ^ result as u8) & 0x80) != 0));
+        self.a = result as u8;
         self.update_nz(self.a);
     }
 }
