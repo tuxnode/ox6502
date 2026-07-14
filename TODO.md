@@ -26,10 +26,21 @@
 - [x] Branch 指令（BCC/BCS/BEQ/BNE/BMI/BPL/BVC/BVS/BRA）
 - [x] Logic 指令（AND/ORA/EOR/BIT/TRB/TSB）
 - [x] Shift/Rotate 指令（ASL/LSR/ROL/ROR）
-- [x] ADC（加法，含 BCD 模式）
-- [x] SBC（减法，含 BCD 模式）
+- [x] ADC/SBC（二进制模式，NMOS 6502 D flag 无效）
 - [x] BRK（软件中断）
 - [x] Klaus2m5 功能测试 ROM（6502_functional_test.bin）
+- [x] JMP (ind) NMOS 页边界 bug
+- [x] NMOS 6502 非法指令（SST 测试 247/256 通过，96.5%）
+  - [x] LAX（0xA3, 0xA7, 0xAB, 0xAF, 0xB3, 0xB7, 0xBF）
+  - [x] SAX（0x83, 0x87, 0x8F, 0x97）
+  - [x] DCP（0xC3, 0xC7, 0xCF, 0xD3, 0xD7, 0xDB, 0xDF）
+  - [x] ISC（0xE3, 0xE7, 0xEF, 0xF3, 0xF7, 0xFB, 0xFF）
+  - [x] SLO/RLA/SRE/RRA 全系列
+  - [x] ANC, ALR, ARR, XAA, LAS
+  - [x] AHX, TAS, SHY, SHX
+  - [x] KIL（CPU 锁死，PC 不前进）
+  - [x] 所有 NOP 变体
+- [x] CMOS 指令映射为 NMOS 行为（STZ/BRA/PHX/PHY/PLX/PLY/INC A/DEC A → NOP）
 - [x] 交互式监视器（monitor/）
   - [x] 反汇编器（lookup 表 + disassemble_at）
   - [x] 命令解析（parse）和分发（execute）
@@ -45,12 +56,15 @@
 
 ## 待实现
 
-### 系统指令
-- [ ] WAI / STP（CMOS 特有）
-
-### 测试 ROM
-- [ ] 65C02_extended_opcodes_test.bin（尚未加入 tests/roms/）
-- [ ] 6502_decimal_test.bin（尚未加入 tests/roms/）
+### SST 未通过的 opcode（9 个，行为因 CPU 版本而异）
+- [ ] XAA（0x8B）— 不稳定，行为因 CPU 版本而异
+- [ ] AHX（0x93, 0x9F）— H 值不稳定
+- [ ] TAS（0x9B）— H 值不稳定
+- [ ] SHY（0x9C）— 地址计算因版本而异
+- [ ] SHX（0x9E）— 地址计算因版本而异
+- [ ] LAX #（0xAB）— 不稳定，行为因 CPU 版本而异
+- [ ] AXS/CMP（0xCB）— 需要调整标志位
+- [ ] SBC #（0xEB）— 替代编码，需要验证标志位
 
 ### 精确周期模拟
 - [ ] 跨页检测（absolute_x/y 跨页 +1 周期）
