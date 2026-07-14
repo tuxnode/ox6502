@@ -1,5 +1,5 @@
 use crate::bus::Bus;
-use crate::cpu::{self, Cpu};
+use crate::cpu::Cpu;
 use crate::monitor::disass::disassemble_at;
 use crate::monitor::{Monitor, TraceEntry};
 
@@ -163,7 +163,10 @@ impl Monitor {
         let n = count.unwrap_or(total).min(total);
         let start = total - n;
         for entry in self.trace.iter().skip(start) {
-            println!("{:04X}  {:<24} (+{} cycles)", entry.addr, entry.text, entry.cycles);
+            println!(
+                "{:04X}  {:<24} (+{} cycles)",
+                entry.addr, entry.text, entry.cycles
+            );
         }
     }
 
@@ -213,4 +216,56 @@ impl Monitor {
         }
         true
     }
+
+    pub fn parse(input: &str) -> Command {
+        let input = input.trim();
+        if input.is_empty() {
+            return Command::Unknown(input.to_string());
+        }
+        let mut parts = input.split_whitespace();
+        let cmd = parts.next().unwrap();
+
+        match cmd {
+            "s" | "step" => Command::Step,
+            "c" | "continue" => Command::Continue,
+            "r" | "regs" => Command::Registers,
+            "d" | "dis" | "disassemble" => {
+                let addr = parts.next().and_then(|s| parse_addr(s));
+                let count = parts.next().and_then(|s| s.parse::<u8>().ok());
+                Command::Disassemble { addr, count }
+            }
+            "m" | "mem" | "memory" => {
+                let addr = parts.next().and_then(|s| parse_addr(s));
+                let len = parts.next().and_then(|s| parse_addr(s));
+                Command::Memory { addr, len }
+            }
+            "b" => {
+                let addr = parts.next().and_then(|s| parse_addr(s));
+                match addr {
+                    Some(a) => Command::Break { addr: a },
+                    None => Command::Unknown(input.to_string()),
+                }
+            }
+            "bc" => {
+                let id = parts.next().and_then(|s| s.parse::<usize>().ok());
+                match id {
+                    Some(i) => Command::BreakClear { id: i },
+                    None => Command::Unknown(input.to_string()),
+                }
+            }
+            "bl" | "breaklist" => Command::BreakList,
+            "t" | "trace" => {
+                let count = parts.next().and_then(|s| s.parse::<usize>().ok());
+                Command::Trace { count }
+            }
+            "q" | "quit" => Command::Quit,
+            "h" | "help" => Command::Help,
+            _ => Command::Unknown(input.to_string()),
+        }
+    }
+}
+
+fn parse_addr(s: &str) -> Option<u16> {
+    let s = s.trim_start_matches('$');
+    u16::from_str_radix(s, 16).ok()
 }
