@@ -12,7 +12,7 @@ pub fn run<B: Bus>(cpu: &mut Cpu<B>) {
     let mut monitor = Monitor::new();
 
     println!("ox6502 monitor. Type 'h' for help.");
-    println!("PC: ${:04X}", cpu.pc);
+    monitor.print_current(cpu);
 
     loop {
         print!("> ");

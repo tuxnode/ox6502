@@ -52,6 +52,8 @@ impl Monitor {
         let pc = cpu.pc;
         let (text, _) = disassemble_at(pc, |a| cpu.read(a));
         let cycles = cpu.step();
+        println!("{:04X}  {:<24} (+{} cycles)", pc, text, cycles);
+        self.print_regs(cpu);
         self.trace.push_back(TraceEntry {
             addr: pc,
             text,
@@ -75,20 +77,43 @@ impl Monitor {
                 break;
             }
         }
+        self.print_current(cpu);
+    }
+
+    fn print_regs<B: Bus>(&self, cpu: &Cpu<B>) {
+        println!(
+            "  A:{:02X} X:{:02X} Y:{:02X} SP:{:02X} PC:{:04X} {}",
+            cpu.a,
+            cpu.x,
+            cpu.y,
+            cpu.sp,
+            cpu.pc,
+            Self::flags_str(cpu.status)
+        );
+    }
+
+    pub fn print_current<B: Bus>(&self, cpu: &mut Cpu<B>) {
+        let (text, _) = disassemble_at(cpu.pc, |a| cpu.read(a));
+        println!("{:04X}  {}", cpu.pc, text);
+        self.print_regs(cpu);
+    }
+
+    fn flags_str(status: u8) -> String {
+        let n = if status & 0x80 != 0 { 'N' } else { 'n' };
+        let v = if status & 0x40 != 0 { 'V' } else { 'v' };
+        let b = if status & 0x10 != 0 { 'B' } else { 'b' };
+        let d = if status & 0x08 != 0 { 'D' } else { 'd' };
+        let i = if status & 0x04 != 0 { 'I' } else { 'i' };
+        let z = if status & 0x02 != 0 { 'Z' } else { 'z' };
+        let c = if status & 0x01 != 0 { 'C' } else { 'c' };
+        format!("{}{}-{}{}{}{}{}", n, v, b, d, i, z, c)
     }
 
     pub fn cmd_regs<B: Bus>(&self, cpu: &Cpu<B>) {
         println!("A:  ${:02X}  X: ${:02X}  Y: ${:02X}", cpu.a, cpu.x, cpu.y);
         println!("SP: ${:02X}  PC: ${:04X}", cpu.sp, cpu.pc);
         println!("NV-BDIZC");
-        let n = if cpu.status & 0x80 != 0 { 'N' } else { 'n' };
-        let v = if cpu.status & 0x40 != 0 { 'V' } else { 'v' };
-        let b = if cpu.status & 0x10 != 0 { 'B' } else { 'b' };
-        let d = if cpu.status & 0x08 != 0 { 'D' } else { 'd' };
-        let i = if cpu.status & 0x04 != 0 { 'I' } else { 'i' };
-        let z = if cpu.status & 0x02 != 0 { 'Z' } else { 'z' };
-        let c = if cpu.status & 0x01 != 0 { 'C' } else { 'c' };
-        println!("{}{}-{}{}{}{}{}", n, v, b, d, i, z, c);
+        println!("{}", Self::flags_str(cpu.status));
     }
 
     pub fn cmd_disass<B: Bus>(&self, cpu: &mut Cpu<B>, addr: u16, count: u8) {
