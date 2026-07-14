@@ -1,12 +1,35 @@
 use std::collections::VecDeque;
+use std::io::{self, Write};
 
 mod commands;
 mod disass;
 
 use crate::bus::Bus;
 use crate::cpu::Cpu;
+use commands::Command;
 
-pub fn run<B: Bus>(cpu: &mut Cpu<B>) {}
+pub fn run<B: Bus>(cpu: &mut Cpu<B>) {
+    let mut monitor = Monitor::new();
+
+    println!("ox6502 monitor. Type 'h' for help.");
+    println!("PC: ${:04X}", cpu.pc);
+
+    loop {
+        print!("> ");
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        if io::stdin().read_line(&mut input).is_err() {
+            break;
+        }
+
+        let cmd = Monitor::parse(&input);
+        if !monitor.execute(cmd, cpu) {
+            println!("Bye.");
+            break;
+        }
+    }
+}
 
 pub struct TraceEntry {
     pub addr: u16,
