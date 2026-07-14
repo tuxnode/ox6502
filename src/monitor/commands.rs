@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use crate::bus::Bus;
 use crate::cpu::{self, Cpu};
 use crate::monitor::disass::disassemble_at;
@@ -21,7 +19,7 @@ pub enum Command {
         addr: u16,
     },
     BreakClear {
-        addr: u16,
+        id: usize,
     },
     BreakList,
     Trace {
@@ -41,7 +39,7 @@ impl Monitor {
         println!("  d [addr] [count]     Disassemble [count] instructions at [addr]");
         println!("  m [addr] [len]       Hex dump [len] bytes at [addr]");
         println!("  b <addr>             Set breakpoint at <addr>");
-        println!("  bc <addr>            Clear breakpoint at <addr>");
+        println!("  bc <id>              Clear breakpoint by id");
         println!("  bl                   List all breakpoints");
         println!("  t [count]            Show last [count] trace entries");
         println!("  q, quit              Exit monitor");
@@ -68,8 +66,8 @@ impl Monitor {
         loop {
             let pc_before = cpu.pc;
             cpu.step();
-            if self.breakpoints.contains(&cpu.pc) {
-                println!("Breakpoint hit at ${:04X}", cpu.pc);
+            if self.breakpoints.contains(pc_before) {
+                println!("Breakpoint hit at ${:04X}", pc_before);
                 break;
             }
             if cpu.pc == pc_before {
@@ -133,10 +131,26 @@ impl Monitor {
     }
 
     pub fn cmd_set_breakpoint(&mut self, addr: u16) {
-        if self.breakpoints.insert(addr) {
-            println!("Breakpoint set at ${:04X}", addr);
+        let id = self.breakpoints.insert(addr);
+        println!("Breakpoint {} set at ${:04X}", id, addr);
+    }
+
+    pub fn cmd_break_clear(&mut self, id: usize) {
+        if self.breakpoints.remove_by_id(id) {
+            println!("Breakpoint {} deleted", id);
         } else {
-            println!("Breakpoint already exists at ${:04X}", addr);
+            println!("No breakpoint with id {}", id);
+        }
+    }
+
+    pub fn cmd_break_list(&self) {
+        let bps = self.breakpoints.list();
+        if bps.is_empty() {
+            println!("No breakpoints");
+        } else {
+            for bp in bps {
+                println!("  {}  ${:04X}", bp.id, bp.addr);
+            }
         }
     }
 }
