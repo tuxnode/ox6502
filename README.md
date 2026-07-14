@@ -20,3 +20,33 @@ cargo build
 ```bash
 cargo test
 ```
+
+## Monitor
+
+An interactive debugger for stepping through 6502/65C02 programs.
+
+```bash
+# Run in monitor mode
+cargo run -- tests/roms/6502_functional_test.bin --debug
+
+# Run in batch mode (default)
+cargo run -- tests/roms/6502_functional_test.bin
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `s`, `step` | Execute one instruction |
+| `c`, `continue` | Run until breakpoint or trap |
+| `r`, `regs` | Show registers and flags |
+| `d [addr] [count]` | Disassemble instructions at address |
+| `m [addr] [len]` | Hex dump memory |
+| `b <addr>` | Set breakpoint |
+| `bc <id>` | Clear breakpoint by id |
+| `bl` | List all breakpoints |
+| `t [count]` | Show trace history |
+| `h`, `help` | Show help |
+| `q`, `quit` | Exit monitor |
+
+Press Enter to repeat the last command. Addresses are hex, with or without `$` prefix (e.g. `0400` or `$0400`).

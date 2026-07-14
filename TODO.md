@@ -30,6 +30,18 @@
 - [x] SBC（减法，含 BCD 模式）
 - [x] BRK（软件中断）
 - [x] Klaus2m5 功能测试 ROM（6502_functional_test.bin）
+- [x] 交互式监视器（monitor/）
+  - [x] 反汇编器（lookup 表 + disassemble_at）
+  - [x] 命令解析（parse）和分发（execute）
+  - [x] 单步执行（step）+ 寄存器显示
+  - [x] 继续执行（continue）+ 断点检测
+  - [x] 寄存器查看（regs）+ flags 显示
+  - [x] 反汇编命令（disassemble）
+  - [x] 内存转储（hexdump）
+  - [x] 断点管理（break/clear/list，按编号删除）
+  - [x] 执行历史（trace）
+  - [x] 空回车重复上一条命令
+  - [x] main.rs 集成（--debug 参数）
 
 ## 待实现
 
