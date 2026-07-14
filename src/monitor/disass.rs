@@ -21,8 +21,14 @@ pub enum Mode {
 pub fn operand_bytes(mode: Mode) -> u8 {
     match mode {
         Mode::Implied | Mode::Accumulator => 0,
-        Mode::Relative | Mode::Immediate | Mode::ZeroPage | Mode::ZeroPageX
-        | Mode::ZeroPageY | Mode::ZpIndirect | Mode::ZpIndirectX | Mode::ZpIndirectY => 1,
+        Mode::Relative
+        | Mode::Immediate
+        | Mode::ZeroPage
+        | Mode::ZeroPageX
+        | Mode::ZeroPageY
+        | Mode::ZpIndirect
+        | Mode::ZpIndirectX
+        | Mode::ZpIndirectY => 1,
         Mode::Absolute | Mode::AbsoluteX | Mode::AbsoluteY | Mode::Indirect => 2,
     }
 }
@@ -276,5 +282,76 @@ pub fn lookup(opcode: u8) -> Option<(&'static str, Mode, u8)> {
         opcodes::RTI => Some(("RTI", Mode::Implied, 6)),
 
         _ => None,
+    }
+}
+
+pub fn disassemble_at(addr: u16, mut read: impl FnMut(u16) -> u8) -> (String, u8) {
+    let opcode = read(addr);
+
+    let (mnem, mode, _) = match lookup(opcode) {
+        Some(info) => info,
+        None => return (format!("??? ({:02X})", opcode), 1),
+    };
+
+    match mode {
+        Mode::Implied => (mnem.to_string(), 1),
+        Mode::Accumulator => (format!("{} A", mnem), 1),
+        Mode::Immediate => {
+            let b = read(addr.wrapping_add(1));
+            (format!("{} #{:02X}", mnem, b), 2)
+        }
+        Mode::ZeroPage => {
+            let b = read(addr.wrapping_add(1));
+            (format!("{} ${:02X}", mnem, b), 2)
+        }
+        Mode::ZeroPageX => {
+            let b = read(addr.wrapping_add(1));
+            (format!("{} ${:02X},X", mnem, b), 2)
+        }
+        Mode::ZeroPageY => {
+            let b = read(addr.wrapping_add(1));
+            (format!("{} ${:02X},Y", mnem, b), 2)
+        }
+        Mode::Absolute => {
+            let lo = read(addr.wrapping_add(1));
+            let hi = read(addr.wrapping_add(2));
+            let addr16 = (hi as u16) << 8 | lo as u16;
+            (format!("{} ${:04X}", mnem, addr16), 3)
+        }
+        Mode::AbsoluteX => {
+            let lo = read(addr.wrapping_add(1));
+            let hi = read(addr.wrapping_add(2));
+            let addr16 = (hi as u16) << 8 | lo as u16;
+            (format!("{} ${:04X},X", mnem, addr16), 3)
+        }
+        Mode::AbsoluteY => {
+            let lo = read(addr.wrapping_add(1));
+            let hi = read(addr.wrapping_add(2));
+            let addr16 = (hi as u16) << 8 | lo as u16;
+            (format!("{} ${:04X},Y", mnem, addr16), 3)
+        }
+        Mode::Indirect => {
+            let lo = read(addr.wrapping_add(1));
+            let hi = read(addr.wrapping_add(2));
+            let addr16 = (hi as u16) << 8 | lo as u16;
+            (format!("{} (${:04X})", mnem, addr16), 3)
+        }
+        Mode::ZpIndirect => {
+            let b = read(addr.wrapping_add(1));
+            (format!("{} (${:02X})", mnem, b), 2)
+        }
+        Mode::ZpIndirectX => {
+            let b = read(addr.wrapping_add(1));
+            (format!("{} (${:02X},X)", mnem, b), 2)
+        }
+        Mode::ZpIndirectY => {
+            let b = read(addr.wrapping_add(1));
+            (format!("{} (${:02X}),Y", mnem, b), 2)
+        }
+        Mode::Relative => {
+            let offset = read(addr.wrapping_add(1)) as i8;
+            let target = (addr as i16 + 2 + offset as i16) as u16;
+            (format!("{} ${:04X}", mnem, target), 2)
+        }
     }
 }
