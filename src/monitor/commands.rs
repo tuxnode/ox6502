@@ -166,4 +166,51 @@ impl Monitor {
             println!("{:04X}  {:<24} (+{} cycles)", entry.addr, entry.text, entry.cycles);
         }
     }
+
+    pub fn execute<B: Bus>(&mut self, cmd: Command, cpu: &mut Cpu<B>) -> bool {
+        match cmd {
+            Command::Step => {
+                self.cmd_step(cpu);
+            }
+            Command::Continue => {
+                self.cmd_continue(cpu);
+            }
+            Command::Registers => {
+                self.cmd_regs(cpu);
+            }
+            Command::Disassemble { addr, count } => {
+                let a = addr.unwrap_or(cpu.pc);
+                let n = count.unwrap_or(10);
+                self.cmd_disass(cpu, a, n);
+            }
+            Command::Memory { addr, len } => {
+                let a = addr.unwrap_or(0);
+                let l = len.unwrap_or(128) as u8;
+                self.cmd_hexdump(cpu, a, l);
+            }
+            Command::Break { addr } => {
+                self.cmd_set_breakpoint(addr);
+            }
+            Command::BreakClear { id } => {
+                self.cmd_break_clear(id);
+            }
+            Command::BreakList => {
+                self.cmd_break_list();
+            }
+            Command::Trace { count } => {
+                self.cmd_trace(count);
+            }
+            Command::Help => {
+                Self::cmd_help();
+            }
+            Command::Quit => {
+                return false;
+            }
+            Command::Unknown(input) => {
+                println!("Unknown command: {}", input);
+                println!("Type 'h' for help.");
+            }
+        }
+        true
+    }
 }
