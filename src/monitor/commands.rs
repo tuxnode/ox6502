@@ -1,0 +1,142 @@
+use std::collections::VecDeque;
+
+use crate::bus::Bus;
+use crate::cpu::{self, Cpu};
+use crate::monitor::disass::disassemble_at;
+use crate::monitor::{Monitor, TraceEntry};
+
+pub enum Command {
+    Step,
+    Continue,
+    Registers,
+    Disassemble {
+        addr: Option<u16>,
+        count: Option<u8>,
+    },
+    Memory {
+        addr: Option<u16>,
+        len: Option<u16>,
+    },
+    Break {
+        addr: u16,
+    },
+    BreakClear {
+        addr: u16,
+    },
+    BreakList,
+    Trace {
+        count: Option<usize>,
+    },
+    Quit,
+    Help,
+    Unknown(String),
+}
+
+impl Monitor {
+    pub fn cmd_help() {
+        println!("Commands:");
+        println!("  s, step              Step one instruction");
+        println!("  c, continue          Continue execution until breakpoint or trap");
+        println!("  r, regs              Show registers and flags");
+        println!("  d [addr] [count]     Disassemble [count] instructions at [addr]");
+        println!("  m [addr] [len]       Hex dump [len] bytes at [addr]");
+        println!("  b <addr>             Set breakpoint at <addr>");
+        println!("  bc <addr>            Clear breakpoint at <addr>");
+        println!("  bl                   List all breakpoints");
+        println!("  t [count]            Show last [count] trace entries");
+        println!("  q, quit              Exit monitor");
+        println!("  h, help              Show this help");
+        println!();
+        println!("Addresses are hex, with or without $ prefix (e.g. 0400 or $0400).");
+    }
+
+    pub fn cmd_step<B: Bus>(&mut self, cpu: &mut Cpu<B>) {
+        let pc = cpu.pc;
+        let (text, _) = disassemble_at(pc, |a| cpu.read(a));
+        let cycles = cpu.step();
+        self.trace.push_back(TraceEntry {
+            addr: pc,
+            text,
+            cycles,
+        });
+        if self.trace.len() > 1000 {
+            self.trace.pop_front();
+        }
+    }
+
+    pub fn cmd_continue<B: Bus>(&mut self, cpu: &mut Cpu<B>) {
+        loop {
+            let pc_before = cpu.pc;
+            cpu.step();
+            if self.breakpoints.contains(&cpu.pc) {
+                println!("Breakpoint hit at ${:04X}", cpu.pc);
+                break;
+            }
+            if cpu.pc == pc_before {
+                println!("Trap at ${:04X}", cpu.pc);
+                break;
+            }
+        }
+    }
+
+    pub fn cmd_regs<B: Bus>(&self, cpu: &Cpu<B>) {
+        println!("A:  ${:02X}  X: ${:02X}  Y: ${:02X}", cpu.a, cpu.x, cpu.y);
+        println!("SP: ${:02X}  PC: ${:04X}", cpu.sp, cpu.pc);
+        println!("NV-BDIZC");
+        let n = if cpu.status & 0x80 != 0 { 'N' } else { 'n' };
+        let v = if cpu.status & 0x40 != 0 { 'V' } else { 'v' };
+        let b = if cpu.status & 0x10 != 0 { 'B' } else { 'b' };
+        let d = if cpu.status & 0x08 != 0 { 'D' } else { 'd' };
+        let i = if cpu.status & 0x04 != 0 { 'I' } else { 'i' };
+        let z = if cpu.status & 0x02 != 0 { 'Z' } else { 'z' };
+        let c = if cpu.status & 0x01 != 0 { 'C' } else { 'c' };
+        println!("{}{}-{}{}{}{}{}", n, v, b, d, i, z, c);
+    }
+
+    pub fn cmd_disass<B: Bus>(&self, cpu: &mut Cpu<B>, addr: u16, count: u8) {
+        let mut pc = addr;
+        for _ in 0..count {
+            let (text, len) = disassemble_at(pc, |a| cpu.read(a));
+            println!("{:04X}  {}", pc, text);
+            pc = pc.wrapping_add(len as u16);
+        }
+    }
+
+    pub fn cmd_hexdump<B: Bus>(&self, cpu: &mut Cpu<B>, addr: u16, len: u8) {
+        let mut offset = 0u16;
+        while offset < len as u16 {
+            let line_addr = addr.wrapping_add(offset);
+            let remaining = (len as u16) - offset;
+            let line_len = if remaining > 16 { 16 } else { remaining };
+
+            let mut hex = String::new();
+            let mut ascii = String::new();
+
+            for i in 0..16u16 {
+                if i < line_len {
+                    let byte = cpu.read(line_addr.wrapping_add(i));
+                    hex.push_str(&format!("{:02X} ", byte));
+                    if byte >= 0x20 && byte <= 0x7E {
+                        ascii.push(byte as char);
+                    } else {
+                        ascii.push('.');
+                    }
+                } else {
+                    hex.push_str("   ");
+                    ascii.push(' ');
+                }
+            }
+
+            println!("{:04X}  {} |{}|", line_addr, hex, ascii);
+            offset += line_len;
+        }
+    }
+
+    pub fn cmd_set_breakpoint(&mut self, addr: u16) {
+        if self.breakpoints.insert(addr) {
+            println!("Breakpoint set at ${:04X}", addr);
+        } else {
+            println!("Breakpoint already exists at ${:04X}", addr);
+        }
+    }
+}
