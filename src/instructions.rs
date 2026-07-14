@@ -258,7 +258,123 @@ impl<B: Bus> Cpu<B> {
             opcodes::SBC_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.sbc(v); 6 }
             opcodes::SBC_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.sbc(v); 5 }
 
-            _ => panic!("Unknown opcode: {:#04X}", opcode),
+            // ==================== NMOS 6502 Illegal Opcodes ====================
+            // DOP (Double NOP): various addressing modes, read operand but do nothing
+            0x04 | 0x44 | 0x64 => { self.zeropage(); 3 },
+            0x0C | 0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => { self.absolute(); 4 },
+            0x14 | 0x34 | 0x54 | 0xD4 | 0xF4 => { self.zeropage_x(); 4 },
+            0x80 => { self.branch(true) }, // BRA on NMOS is BPL with bit 7 set (always taken)
+            0x82 | 0xC2 | 0xE2 => { self.pc = self.pc.wrapping_add(1); 2 },
+            0x89 => { self.pc = self.pc.wrapping_add(1); 2 }, // BIT # as NOP
+            0x1A | 0x3A => 2, // NOP (INC A / DEC A on CMOS)
+            0x5A | 0x7A | 0xDA | 0xFA => 2, // NOP (PHY/PLY/PHX/PLX on CMOS)
+            0xCB | 0xDB => 2, // NOP (WAI/STP on CMOS)
+
+            // LAX: Load A and X from memory
+            0xA3 => { let a = self.pre_indexed_x(); self.lax(a); 6 }
+            0xA7 => { let a = self.zeropage(); self.lax(a); 3 }
+            0xAF => { let a = self.absolute(); self.lax(a); 4 }
+            0xB3 => { let a = self.post_indexed_y(); self.lax(a); 5 }
+            0xB7 => { let a = self.zeropage_y(); self.lax(a); 4 }
+            0xBF => { let a = self.absolute_y(); self.lax(a); 4 }
+            0xAB => { let a = self.immediate(); self.lax(a); 2 } // ATX (LAX immediate)
+
+            // SAX: Store A AND X to memory
+            0x83 => { let a = self.pre_indexed_x(); let v = self.a & self.x; self.write(a, v); 6 }
+            0x87 => { let a = self.zeropage(); let v = self.a & self.x; self.write(a, v); 3 }
+            0x8F => { let a = self.absolute(); let v = self.a & self.x; self.write(a, v); 4 }
+            0x97 => { let a = self.zeropage_y(); let v = self.a & self.x; self.write(a, v); 4 }
+
+            // DCP: Decrement memory then Compare with A
+            0xC3 => { let a = self.pre_indexed_x(); self.dcp(a); 8 }
+            0xC7 => { let a = self.zeropage(); self.dcp(a); 5 }
+            0xCF => { let a = self.absolute(); self.dcp(a); 6 }
+            0xD3 => { let a = self.post_indexed_y(); self.dcp(a); 8 }
+            0xD7 => { let a = self.zeropage_x(); self.dcp(a); 6 }
+            0xDB => { let a = self.absolute_y(); self.dcp(a); 7 }
+            0xDF => { let a = self.absolute_x(); self.dcp(a); 7 }
+
+            // ISB/ISC: Increment memory then Subtract with Carry
+            0xE3 => { let a = self.pre_indexed_x(); self.isb(a); 8 }
+            0xE7 => { let a = self.zeropage(); self.isb(a); 5 }
+            0xEF => { let a = self.absolute(); self.isb(a); 6 }
+            0xF3 => { let a = self.post_indexed_y(); self.isb(a); 8 }
+            0xF7 => { let a = self.zeropage_x(); self.isb(a); 6 }
+            0xFB => { let a = self.absolute_y(); self.isb(a); 7 }
+            0xFF => { let a = self.absolute_x(); self.isb(a); 7 }
+
+            // SLO: ASL memory then ORA with A
+            0x03 => { let a = self.pre_indexed_x(); self.slo(a); 8 }
+            0x07 => { let a = self.zeropage(); self.slo(a); 5 }
+            0x0F => { let a = self.absolute(); self.slo(a); 6 }
+            0x13 => { let a = self.post_indexed_y(); self.slo(a); 8 }
+            0x17 => { let a = self.zeropage_x(); self.slo(a); 6 }
+            0x1B => { let a = self.absolute_y(); self.slo(a); 7 }
+            0x1F => { let a = self.absolute_x(); self.slo(a); 7 }
+
+            // RLA: ROL memory then AND with A
+            0x23 => { let a = self.pre_indexed_x(); self.rla(a); 8 }
+            0x27 => { let a = self.zeropage(); self.rla(a); 5 }
+            0x2F => { let a = self.absolute(); self.rla(a); 6 }
+            0x33 => { let a = self.post_indexed_y(); self.rla(a); 8 }
+            0x37 => { let a = self.zeropage_x(); self.rla(a); 6 }
+            0x3B => { let a = self.absolute_y(); self.rla(a); 7 }
+            0x3F => { let a = self.absolute_x(); self.rla(a); 7 }
+
+            // SRE: LSR memory then EOR with A
+            0x43 => { let a = self.pre_indexed_x(); self.sre(a); 8 }
+            0x47 => { let a = self.zeropage(); self.sre(a); 5 }
+            0x4F => { let a = self.absolute(); self.sre(a); 6 }
+            0x53 => { let a = self.post_indexed_y(); self.sre(a); 8 }
+            0x57 => { let a = self.zeropage_x(); self.sre(a); 6 }
+            0x5B => { let a = self.absolute_y(); self.sre(a); 7 }
+            0x5F => { let a = self.absolute_x(); self.sre(a); 7 }
+
+            // RRA: ROR memory then ADC
+            0x63 => { let a = self.pre_indexed_x(); self.rra(a); 8 }
+            0x67 => { let a = self.zeropage(); self.rra(a); 5 }
+            0x6F => { let a = self.absolute(); self.rra(a); 6 }
+            0x73 => { let a = self.post_indexed_y(); self.rra(a); 8 }
+            0x77 => { let a = self.zeropage_x(); self.rra(a); 6 }
+            0x7B => { let a = self.absolute_y(); self.rra(a); 7 }
+            0x7F => { let a = self.absolute_x(); self.rra(a); 7 }
+
+            // AHX/SHX: Store A AND X AND (high byte of addr + 1)
+            0x93 => { let addr = self.post_indexed_y(); self.write(addr, self.a & self.x & ((addr >> 8) as u8 + 1)); 6 }
+            0x9F => { let addr = self.absolute_y(); self.write(addr, self.a & self.x & ((addr >> 8) as u8 + 1)); 5 }
+
+            // TAS: Transfer A AND X to SP, then store high byte
+            0x9B => {
+                let sp_val = self.a & self.x;
+                self.sp = sp_val;
+                let addr = self.absolute_y();
+                self.write(addr, sp_val & ((addr >> 8) as u8 + 1));
+                5
+            }
+
+            // LAS: Load A, X, and SP from memory
+            0xBB => {
+                let addr = self.absolute_y();
+                let v = self.read(addr);
+                self.a = v;
+                self.x = v;
+                self.sp = v;
+                self.update_nz(v);
+                4
+            }
+
+            // JAM: CPU lockup - treat as 1-byte NOP for emulation
+            0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x92 | 0xB2 | 0xD2 | 0xF2 => 2,
+
+            // Remaining NOP variants
+            0x0B | 0x2B | 0x4B | 0x6B | 0x8B | 0xAB | 0xCB | 0xEB => { self.pc = self.pc.wrapping_add(1); 2 },
+            0x09 | 0x29 | 0x49 | 0x69 | 0x89 | 0xA9 | 0xC9 | 0xE9 => { self.pc = self.pc.wrapping_add(1); 2 },
+            0x0D | 0x2D | 0x4D | 0x6D | 0x8D | 0xAD | 0xCD | 0xED => { self.pc = self.pc.wrapping_add(2); 3 },
+            0x1D | 0x3D | 0x5D | 0x7D | 0x9D | 0xBD | 0xDD | 0xFD => { self.pc = self.pc.wrapping_add(2); 4 },
+            0x19 | 0x39 | 0x59 | 0x79 | 0x99 | 0xB9 | 0xD9 | 0xF9 => { self.pc = self.pc.wrapping_add(2); 4 },
+
+            // Catch-all: treat any remaining unhandled opcode as 1-byte NOP
+            _ => 2,
         }
     }
 
@@ -393,5 +509,72 @@ impl<B: Bus> Cpu<B> {
         self.set_flag(FLAG_V, (((self.a ^ val) & 0x80) != 0) && (((self.a ^ result as u8) & 0x80) != 0));
         self.a = result as u8;
         self.update_nz(self.a);
+    }
+
+    // ==================== Illegal Opcode Helpers ====================
+
+    // LAX: Load A and X from memory
+    fn lax(&mut self, addr: u16) {
+        let v = self.read(addr);
+        self.a = v;
+        self.x = v;
+        self.update_nz(v);
+    }
+
+    // DCP: Decrement memory then Compare with A
+    fn dcp(&mut self, addr: u16) {
+        let v = self.read(addr).wrapping_sub(1);
+        self.write(addr, v);
+        self.compare(self.a, v);
+    }
+
+    // ISB: Increment memory then Subtract with Carry
+    fn isb(&mut self, addr: u16) {
+        let v = self.read(addr).wrapping_add(1);
+        self.write(addr, v);
+        self.sbc(v);
+    }
+
+    // SLO: ASL memory then ORA with A
+    fn slo(&mut self, addr: u16) {
+        let v = self.read(addr);
+        let c = v & 0x80 != 0;
+        let shifted = v << 1;
+        self.write(addr, shifted);
+        self.a |= shifted;
+        self.set_flag(FLAG_C, c);
+        self.update_nz(self.a);
+    }
+
+    // RLA: ROL memory then AND with A
+    fn rla(&mut self, addr: u16) {
+        let v = self.read(addr);
+        let c = v & 0x80 != 0;
+        let rotated = (v << 1) | (self.get_flag(FLAG_C) as u8);
+        self.write(addr, rotated);
+        self.a &= rotated;
+        self.set_flag(FLAG_C, c);
+        self.update_nz(self.a);
+    }
+
+    // SRE: LSR memory then EOR with A
+    fn sre(&mut self, addr: u16) {
+        let v = self.read(addr);
+        let c = v & 0x01 != 0;
+        let shifted = v >> 1;
+        self.write(addr, shifted);
+        self.a ^= shifted;
+        self.set_flag(FLAG_C, c);
+        self.update_nz(self.a);
+    }
+
+    // RRA: ROR memory then ADC
+    fn rra(&mut self, addr: u16) {
+        let v = self.read(addr);
+        let c = v & 0x01 != 0;
+        let rotated = (v >> 1) | (self.get_flag(FLAG_C) as u8) * 0x80;
+        self.write(addr, rotated);
+        self.adc(rotated);
+        self.set_flag(FLAG_C, c);
     }
 }
