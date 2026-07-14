@@ -3,6 +3,7 @@ use crate::cpu::Cpu;
 use crate::monitor::disass::disassemble_at;
 use crate::monitor::{Monitor, TraceEntry};
 
+#[derive(Clone)]
 pub enum Command {
     Step,
     Continue,
@@ -195,7 +196,7 @@ impl Monitor {
         }
     }
 
-    pub fn execute<B: Bus>(&mut self, cmd: Command, cpu: &mut Cpu<B>) -> bool {
+    pub fn execute<B: Bus>(&mut self, cmd: &Command, cpu: &mut Cpu<B>) -> bool {
         match cmd {
             Command::Step => {
                 self.cmd_step(cpu);
@@ -217,16 +218,16 @@ impl Monitor {
                 self.cmd_hexdump(cpu, a, l);
             }
             Command::Break { addr } => {
-                self.cmd_set_breakpoint(addr);
+                self.cmd_set_breakpoint(*addr);
             }
             Command::BreakClear { id } => {
-                self.cmd_break_clear(id);
+                self.cmd_break_clear(*id);
             }
             Command::BreakList => {
                 self.cmd_break_list();
             }
             Command::Trace { count } => {
-                self.cmd_trace(count);
+                self.cmd_trace(*count);
             }
             Command::Help => {
                 Self::cmd_help();

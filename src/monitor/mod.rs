@@ -14,6 +14,8 @@ pub fn run<B: Bus>(cpu: &mut Cpu<B>) {
     println!("ox6502 monitor. Type 'h' for help.");
     monitor.print_current(cpu);
 
+    let mut last_cmd: Option<Command> = None;
+
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -23,10 +25,23 @@ pub fn run<B: Bus>(cpu: &mut Cpu<B>) {
             break;
         }
 
-        let cmd = Monitor::parse(&input);
-        if !monitor.execute(cmd, cpu) {
+        let input = input.trim();
+        let cmd = if input.is_empty() {
+            match last_cmd.clone() {
+                Some(c) => c,
+                None => continue,
+            }
+        } else {
+            Monitor::parse(input)
+        };
+
+        if !monitor.execute(&cmd, cpu) {
             println!("Bye.");
             break;
+        }
+
+        if !matches!(cmd, Command::Quit | Command::Unknown(_)) {
+            last_cmd = Some(cmd);
         }
     }
 }
