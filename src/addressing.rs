@@ -38,11 +38,13 @@ impl<B: Bus> Cpu<B> {
         self.fetch_u16().wrapping_add(self.y as u16)
     }
 
-    // Indirect Addressing (cycles + 2)
+    // Indirect Addressing (NMOS 6502 page boundary bug)
     pub(crate) fn indirect(&mut self) -> u16 {
         let ptr = self.fetch_u16();
         let lo = self.read(ptr) as u16;
-        let hi = self.read(ptr.wrapping_add(1)) as u16;
+        // NMOS bug: high byte read from same page, not ptr+1
+        let hi_addr = (ptr & 0xFF00) | ((ptr + 1) & 0xFF);
+        let hi = self.read(hi_addr) as u16;
         (hi << 8) | lo
     }
 

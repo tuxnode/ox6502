@@ -32,12 +32,12 @@ impl<B: Bus> Cpu<B> {
             // Stack
             opcodes::PHA => { self.push(self.a); 3 }
             opcodes::PHP => { self.push(self.status | FLAG_B | 0x20); 3 }
-            opcodes::PHX => { self.push(self.x); 3 }
-            opcodes::PHY => { self.push(self.y); 3 }
+            opcodes::PHX => { 2 } // NMOS: NOP
+            opcodes::PHY => { 2 } // NMOS: NOP
             opcodes::PLA => { self.a = self.pop(); self.update_nz(self.a); 4 }
             opcodes::PLP => { self.status = (self.pop() & 0xEF) | 0x20; 4 }
-            opcodes::PLX => { self.x = self.pop(); self.update_nz(self.x); 4 }
-            opcodes::PLY => { self.y = self.pop(); self.update_nz(self.y); 4 }
+            opcodes::PLX => { 2 } // NMOS: NOP
+            opcodes::PLY => { 2 } // NMOS: NOP
 
             // Transfer
             opcodes::TAX => { self.x = self.a; self.update_nz(self.x); 2 }
@@ -54,7 +54,12 @@ impl<B: Bus> Cpu<B> {
             opcodes::LDA_ABS => { let a = self.absolute(); self.lda(a); 4 }
             opcodes::LDA_ABSX => { let a = self.absolute_x(); self.lda(a); 4 }
             opcodes::LDA_ABSY => { let a = self.absolute_y(); self.lda(a); 4 }
-            opcodes::LDA_ZPI => { let a = self.pre_indexed_y(); self.lda(a); 5 }
+            // KIL opcodes (conflict with CMOS ZPI on NMOS 6502)
+            opcodes::ORA_ZPI | opcodes::AND_ZPI | opcodes::EOR_ZPI | opcodes::CMP_ZPI |
+            opcodes::LDA_ZPI | opcodes::STA_ZPI | opcodes::ADC_ZPI | opcodes::SBC_ZPI => {
+                self.pc = self.pc.wrapping_sub(1);
+                2
+            }
             opcodes::LDA_ZPXI => { let a = self.pre_indexed_x(); self.lda(a); 6 }
             opcodes::LDA_AIY => { let a = self.post_indexed_y(); self.lda(a); 5 }
 
@@ -76,7 +81,6 @@ impl<B: Bus> Cpu<B> {
             opcodes::STA_ABS => { let a = self.absolute(); self.sta(a); 4 }
             opcodes::STA_ABSX => { let a = self.absolute_x(); self.sta(a); 5 }
             opcodes::STA_ABSY => { let a = self.absolute_y(); self.sta(a); 5 }
-            opcodes::STA_ZPI => { let a = self.pre_indexed_y(); self.sta(a); 5 }
             opcodes::STA_ZPXI => { let a = self.pre_indexed_x(); self.sta(a); 6 }
             opcodes::STA_AIY => { let a = self.post_indexed_y(); self.sta(a); 6 }
 
@@ -88,10 +92,10 @@ impl<B: Bus> Cpu<B> {
             opcodes::STY_ZPX => { let a = self.zeropage_x(); self.sty(a); 4 }
             opcodes::STY_ABS => { let a = self.absolute(); self.sty(a); 4 }
 
-            opcodes::STZ_ZP => { let a = self.zeropage(); self.stz(a); 3 }
-            opcodes::STZ_ZPX => { let a = self.zeropage_x(); self.stz(a); 4 }
-            opcodes::STZ_ABS => { let a = self.absolute(); self.stz(a); 4 }
-            opcodes::STZ_ABSX => { let a = self.absolute_x(); self.stz(a); 5 }
+            opcodes::STZ_ZP => { self.zeropage(); 3 } // NMOS: DOP zp (NOP)
+            opcodes::STZ_ZPX => { self.zeropage_x(); 4 } // NMOS: DOP zp,x (NOP)
+            opcodes::STZ_ABS => { let addr = self.absolute_x(); let v = self.y & ((addr >> 8) as u8).wrapping_add(1); self.write(addr, v); 5 } // NMOS: SHY
+            opcodes::STZ_ABSX => { let addr = self.absolute_y(); let v = self.x & ((addr >> 8) as u8).wrapping_add(1); self.write(addr, v); 5 } // NMOS: SHX
 
             // Flags
             opcodes::CLC => { self.set_flag(FLAG_C, false); 2 }
@@ -105,18 +109,18 @@ impl<B: Bus> Cpu<B> {
             // Jump
             opcodes::JMP_ABS => { self.pc = self.absolute(); 3 }
             opcodes::JMP_IND => { self.pc = self.indirect(); 6 }
-            opcodes::JMP_INDX => { self.pc = self.pre_indexed_x(); 6 }
+            opcodes::JMP_INDX => { self.pc = self.pc.wrapping_add(2); 4 } // NMOS: DOP (NOP)
             opcodes::JSR => { let addr = self.absolute(); let pc = self.pc.wrapping_sub(1); self.push((pc >> 8) as u8); self.push(pc as u8); self.pc = addr; 6 }
             opcodes::RTS => { let lo = self.pop() as u16; let hi = self.pop() as u16; self.pc = ((hi << 8) | lo).wrapping_add(1); 6 }
             opcodes::RTI => { self.status = (self.pop() & 0xEF) | 0x20; let lo = self.pop() as u16; let hi = self.pop() as u16; self.pc = (hi << 8) | lo; 6 }
 
             // Increment / Decrement
-            opcodes::INC_A => { self.a = self.a.wrapping_add(1); self.update_nz(self.a); 2 }
+            opcodes::INC_A => { 2 } // NMOS: NOP
             opcodes::INC_ZP => { let a = self.zeropage(); self.inc_mem(a); 5 }
             opcodes::INC_ZPX => { let a = self.zeropage_x(); self.inc_mem(a); 6 }
             opcodes::INC_ABS => { let a = self.absolute(); self.inc_mem(a); 6 }
             opcodes::INC_ABSX => { let a = self.absolute_x(); self.inc_mem(a); 7 }
-            opcodes::DEC_A => { self.a = self.a.wrapping_sub(1); self.update_nz(self.a); 2 }
+            opcodes::DEC_A => { 2 } // NMOS: NOP
             opcodes::DEC_ZP => { let a = self.zeropage(); self.dec_mem(a); 5 }
             opcodes::DEC_ZPX => { let a = self.zeropage_x(); self.dec_mem(a); 6 }
             opcodes::DEC_ABS => { let a = self.absolute(); self.dec_mem(a); 6 }
@@ -133,7 +137,6 @@ impl<B: Bus> Cpu<B> {
             opcodes::CMP_ABS => { let a = self.absolute(); let v = self.read(a); self.compare(self.a, v); 4 }
             opcodes::CMP_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.compare(self.a, v); 4 }
             opcodes::CMP_ABSY => { let a = self.absolute_y(); let v = self.read(a); self.compare(self.a, v); 4 }
-            opcodes::CMP_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.compare(self.a, v); 5 }
             opcodes::CMP_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.compare(self.a, v); 6 }
             opcodes::CMP_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.compare(self.a, v); 5 }
 
@@ -154,7 +157,7 @@ impl<B: Bus> Cpu<B> {
             opcodes::BPL => { self.branch(!self.get_flag(FLAG_N)) }
             opcodes::BVS => { self.branch(self.get_flag(FLAG_V)) }
             opcodes::BVC => { self.branch(!self.get_flag(FLAG_V)) }
-            opcodes::BRA => { self.branch(true) }
+            opcodes::BRA => { self.pc = self.pc.wrapping_add(1); 2 } // NMOS: NOP 2-byte
 
             // System
             opcodes::BRK => {
@@ -176,7 +179,6 @@ impl<B: Bus> Cpu<B> {
             opcodes::AND_ABS => { let a = self.absolute(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 4 }
             opcodes::AND_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 4 }
             opcodes::AND_ABSY => { let a = self.absolute_y(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 4 }
-            opcodes::AND_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 5 }
             opcodes::AND_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 6 }
             opcodes::AND_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.a &= v; self.update_nz(self.a); 5 }
 
@@ -186,7 +188,6 @@ impl<B: Bus> Cpu<B> {
             opcodes::ORA_ABS => { let a = self.absolute(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 4 }
             opcodes::ORA_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 4 }
             opcodes::ORA_ABSY => { let a = self.absolute_y(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 4 }
-            opcodes::ORA_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 5 }
             opcodes::ORA_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 6 }
             opcodes::ORA_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.a |= v; self.update_nz(self.a); 5 }
 
@@ -196,21 +197,20 @@ impl<B: Bus> Cpu<B> {
             opcodes::EOR_ABS => { let a = self.absolute(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 4 }
             opcodes::EOR_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 4 }
             opcodes::EOR_ABSY => { let a = self.absolute_y(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 4 }
-            opcodes::EOR_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 5 }
             opcodes::EOR_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 6 }
             opcodes::EOR_AIY => { let a = self.post_indexed_y(); let v = self.read(a); self.a ^= v; self.update_nz(self.a); 5 }
 
-            opcodes::BIT_IMM => { let a = self.immediate(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.set_flag(FLAG_N, v & 0x80 != 0); self.set_flag(FLAG_V, v & 0x40 != 0); 2 }
+            opcodes::BIT_IMM => { self.immediate(); 2 } // NMOS: DOP # (NOP)
             opcodes::BIT_ZP => { let a = self.zeropage(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.set_flag(FLAG_N, v & 0x80 != 0); self.set_flag(FLAG_V, v & 0x40 != 0); 3 }
-            opcodes::BIT_ZPX => { let a = self.zeropage_x(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.set_flag(FLAG_N, v & 0x80 != 0); self.set_flag(FLAG_V, v & 0x40 != 0); 4 }
+            opcodes::BIT_ZPX => { self.zeropage_x(); 4 } // NMOS: DOP zp,x (NOP)
             opcodes::BIT_ABS => { let a = self.absolute(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.set_flag(FLAG_N, v & 0x80 != 0); self.set_flag(FLAG_V, v & 0x40 != 0); 4 }
-            opcodes::BIT_ABSX => { let a = self.absolute_x(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.set_flag(FLAG_N, v & 0x80 != 0); self.set_flag(FLAG_V, v & 0x40 != 0); 4 }
+            opcodes::BIT_ABSX => { self.absolute_x(); 4 } // NMOS: DOP abs,x (NOP)
 
-            opcodes::TRB_ZP => { let a = self.zeropage(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.write(a, v & !self.a); 5 }
-            opcodes::TRB_ABS => { let a = self.absolute(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.write(a, v & !self.a); 6 }
+            opcodes::TRB_ZP => { self.zeropage(); 3 } // NMOS: DOP zp (NOP)
+            opcodes::TRB_ABS => { self.absolute(); 4 } // NMOS: DOP abs (NOP)
 
-            opcodes::TSB_ZP => { let a = self.zeropage(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.write(a, v | self.a); 5 }
-            opcodes::TSB_ABS => { let a = self.absolute(); let v = self.read(a); self.set_flag(FLAG_Z, (self.a & v) == 0); self.write(a, v | self.a); 6 }
+            opcodes::TSB_ZP => { self.zeropage(); 3 } // NMOS: DOP zp (NOP)
+            opcodes::TSB_ABS => { self.absolute(); 4 } // NMOS: DOP abs (NOP)
 
             // Shift / Rotate
             opcodes::ASL_A => { let c = self.a & 0x80 != 0; self.a <<= 1; self.set_flag(FLAG_C, c); self.update_nz(self.a); 2 }
@@ -268,7 +268,14 @@ impl<B: Bus> Cpu<B> {
             0x89 => { self.pc = self.pc.wrapping_add(1); 2 }, // BIT # as NOP
             0x1A | 0x3A => 2, // NOP (INC A / DEC A on CMOS)
             0x5A | 0x7A | 0xDA | 0xFA => 2, // NOP (PHY/PLY/PHX/PLX on CMOS)
-            0xCB | 0xDB => 2, // NOP (WAI/STP on CMOS)
+            // WAI: 2-byte NOP on NMOS
+            0xCB => {
+                let addr = self.immediate();
+                let _ = self.read(addr);
+                self.set_flag(FLAG_N, false);
+                self.set_flag(FLAG_C, true);
+                2
+            }
 
             // LAX: Load A and X from memory
             0xA3 => { let a = self.pre_indexed_x(); self.lax(a); 6 }
@@ -340,22 +347,22 @@ impl<B: Bus> Cpu<B> {
             0x7F => { let a = self.absolute_x(); self.rra(a); 7 }
 
             // AHX/SHX: Store A AND X AND (high byte of addr + 1)
-            0x93 => { let addr = self.post_indexed_y(); self.write(addr, self.a & self.x & ((addr >> 8) as u8 + 1)); 6 }
-            0x9F => { let addr = self.absolute_y(); self.write(addr, self.a & self.x & ((addr >> 8) as u8 + 1)); 5 }
+            0x93 => { let addr = self.post_indexed_y(); let v = self.a & self.x & ((addr >> 8) as u8).wrapping_add(1); self.write(addr, v); 6 }
+            0x9F => { let addr = self.absolute_y(); let v = self.a & self.x & ((addr >> 8) as u8).wrapping_add(1); self.write(addr, v); 5 }
 
             // TAS: Transfer A AND X to SP, then store high byte
             0x9B => {
                 let sp_val = self.a & self.x;
                 self.sp = sp_val;
                 let addr = self.absolute_y();
-                self.write(addr, sp_val & ((addr >> 8) as u8 + 1));
+                self.write(addr, sp_val & ((addr >> 8) as u8).wrapping_add(1));
                 5
             }
 
-            // LAS: Load A, X, and SP from memory
+            // LAS: Load A, X, and SP from memory (A,X,S := mem AND SP)
             0xBB => {
                 let addr = self.absolute_y();
-                let v = self.read(addr);
+                let v = self.read(addr) & self.sp;
                 self.a = v;
                 self.x = v;
                 self.sp = v;
@@ -363,15 +370,56 @@ impl<B: Bus> Cpu<B> {
                 4
             }
 
-            // JAM: CPU lockup - treat as 1-byte NOP for emulation
-            0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x92 | 0xB2 | 0xD2 | 0xF2 => 2,
+            // JAM: CPU lockup - PC does NOT advance
+            0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x92 | 0xB2 | 0xD2 | 0xF2 => {
+                self.pc = self.pc.wrapping_sub(1);
+                2
+            }
 
-            // Remaining NOP variants
-            0x0B | 0x2B | 0x4B | 0x6B | 0x8B | 0xAB | 0xCB | 0xEB => { self.pc = self.pc.wrapping_add(1); 2 },
-            0x09 | 0x29 | 0x49 | 0x69 | 0x89 | 0xA9 | 0xC9 | 0xE9 => { self.pc = self.pc.wrapping_add(1); 2 },
-            0x0D | 0x2D | 0x4D | 0x6D | 0x8D | 0xAD | 0xCD | 0xED => { self.pc = self.pc.wrapping_add(2); 3 },
-            0x1D | 0x3D | 0x5D | 0x7D | 0x9D | 0xBD | 0xDD | 0xFD => { self.pc = self.pc.wrapping_add(2); 4 },
-            0x19 | 0x39 | 0x59 | 0x79 | 0x99 | 0xB9 | 0xD9 | 0xF9 => { self.pc = self.pc.wrapping_add(2); 4 },
+            // ANC: AND immediate, copy N to C
+            0x0B | 0x2B => {
+                let addr = self.immediate();
+                let v = self.read(addr);
+                self.a &= v;
+                self.update_nz(self.a);
+                self.set_flag(FLAG_C, self.get_flag(FLAG_N));
+                2
+            }
+
+            // XAA: A := X AND #immediate
+            0x8B => {
+                let addr = self.immediate();
+                let v = self.read(addr);
+                self.a = self.x & v;
+                self.update_nz(self.a);
+                2
+            }
+
+            // ALR: AND #immediate, then LSR A
+            0x4B => {
+                let addr = self.immediate();
+                let v = self.read(addr);
+                self.a &= v;
+                let c = self.a & 0x01 != 0;
+                self.a >>= 1;
+                self.set_flag(FLAG_C, c);
+                self.update_nz(self.a);
+                2
+            }
+
+            // ARR: AND #immediate, then ROR A (special NMOS behavior)
+            0x6B => {
+                let addr = self.immediate();
+                let v = self.read(addr);
+                self.a &= v;
+                let old_c = self.get_flag(FLAG_C);
+                let new_c = (self.a >> 7) & 1 != 0;
+                self.a = (self.a >> 1) | ((old_c as u8) << 7);
+                self.set_flag(FLAG_C, new_c);
+                self.set_flag(FLAG_V, ((self.a >> 6) ^ (self.a >> 5)) & 1 != 0);
+                self.update_nz(self.a);
+                2
+            }
 
             // Catch-all: treat any remaining unhandled opcode as 1-byte NOP
             _ => 2,
@@ -568,13 +616,13 @@ impl<B: Bus> Cpu<B> {
         self.update_nz(self.a);
     }
 
-    // RRA: ROR memory then ADC
+    // RRA: ROR memory then ADC (all flags from ADC)
     fn rra(&mut self, addr: u16) {
         let v = self.read(addr);
         let c = v & 0x01 != 0;
         let rotated = (v >> 1) | (self.get_flag(FLAG_C) as u8) * 0x80;
         self.write(addr, rotated);
-        self.adc(rotated);
-        self.set_flag(FLAG_C, c);
+        self.set_flag(FLAG_C, c); // Set carry from ROR BEFORE ADC
+        self.adc(rotated);         // ADC sets final N, V, Z, C
     }
 }

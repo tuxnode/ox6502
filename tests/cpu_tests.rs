@@ -211,6 +211,7 @@ fn test_sty_zeropage() {
 
 #[test]
 fn test_stz_zeropage() {
+    // NMOS 6502: STZ zp is a NOP (reads operand but does not write)
     let mut bus = TestBus::new();
     bus.memory[0x40] = 0xFF;
     bus.load_program(&[STZ_ZP, 0x40], 0x0400);
@@ -218,8 +219,8 @@ fn test_stz_zeropage() {
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
     
-    cpu.step(); // STZ $40
-    assert_eq!(cpu.read(0x0040), 0x00);
+    cpu.step(); // NOP (STZ $40 on CMOS, NOP on NMOS)
+    assert_eq!(cpu.read(0x0040), 0xFF); // Memory unchanged
 }
 
 // ==================== Stack Operations Tests ====================
@@ -309,6 +310,7 @@ fn test_stack_push_pop_order() {
 
 #[test]
 fn test_phx_plx() {
+    // NMOS 6502: PHX/PLX are NOPs
     let mut bus = TestBus::new();
     bus.load_program(&[
         LDX_IMM, 0xBB,
@@ -321,14 +323,15 @@ fn test_phx_plx() {
     let mut cpu = Cpu::new(bus);
     
     cpu.step(); // LDX #$BB
-    cpu.step(); // PHX
+    cpu.step(); // PHX (NOP on NMOS)
     cpu.step(); // LDX #$00
-    cpu.step(); // PLX
-    assert_eq!(cpu.x, 0xBB);
+    cpu.step(); // PLX (NOP on NMOS)
+    assert_eq!(cpu.x, 0x00); // X unchanged by NOPs
 }
 
 #[test]
 fn test_phy_ply() {
+    // NMOS 6502: PHY/PLY are NOPs
     let mut bus = TestBus::new();
     bus.load_program(&[
         LDY_IMM, 0xCC,
@@ -341,10 +344,10 @@ fn test_phy_ply() {
     let mut cpu = Cpu::new(bus);
     
     cpu.step(); // LDY #$CC
-    cpu.step(); // PHY
+    cpu.step(); // PHY (NOP on NMOS)
     cpu.step(); // LDY #$00
-    cpu.step(); // PLY
-    assert_eq!(cpu.y, 0xCC);
+    cpu.step(); // PLY (NOP on NMOS)
+    assert_eq!(cpu.y, 0x00); // Y unchanged by NOPs
 }
 
 // ==================== Transfer Tests ====================
@@ -642,9 +645,10 @@ fn test_bcs_taken() {
 
 #[test]
 fn test_bra() {
+    // NMOS 6502: BRA is a 2-byte NOP (reads operand but does not branch)
     let mut bus = TestBus::new();
     bus.load_program(&[
-        BRA, 0x04, // Branch to PC+4
+        BRA, 0x04, // NOP on NMOS (reads operand)
         NOP,
         NOP,
         NOP,
@@ -654,8 +658,8 @@ fn test_bra() {
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
     
-    cpu.step(); // BRA +4
-    assert_eq!(cpu.pc, 0x0406);
+    cpu.step(); // NOP (reads operand, advances PC by 2)
+    assert_eq!(cpu.pc, 0x0402); // PC advances past the 2-byte NOP
 }
 
 // ==================== Jump/JSR/RTS Tests ====================
@@ -1092,6 +1096,7 @@ fn test_dec_zeropage() {
 
 #[test]
 fn test_inc_a() {
+    // NMOS 6502: INC A is a NOP
     let mut bus = TestBus::new();
     bus.load_program(&[
         LDA_IMM, 0x7F,
@@ -1102,13 +1107,13 @@ fn test_inc_a() {
     let mut cpu = Cpu::new(bus);
     
     cpu.step(); // LDA #$7F
-    cpu.step(); // INC A
-    assert_eq!(cpu.a, 0x80);
-    assert!(cpu.get_flag(FLAG_N));
+    cpu.step(); // NOP (INC A on NMOS)
+    assert_eq!(cpu.a, 0x7F); // A unchanged by NOP
 }
 
 #[test]
 fn test_dec_a() {
+    // NMOS 6502: DEC A is a NOP
     let mut bus = TestBus::new();
     bus.load_program(&[
         LDA_IMM, 0x80,
@@ -1119,9 +1124,8 @@ fn test_dec_a() {
     let mut cpu = Cpu::new(bus);
     
     cpu.step(); // LDA #$80
-    cpu.step(); // DEC A
-    assert_eq!(cpu.a, 0x7F);
-    assert!(!cpu.get_flag(FLAG_N));
+    cpu.step(); // NOP (DEC A on NMOS)
+    assert_eq!(cpu.a, 0x80); // A unchanged by NOP
 }
 
 // ==================== Flag Tests ====================
@@ -1436,6 +1440,7 @@ fn test_branch_loop() {
 
 #[test]
 fn test_stack_push_pop_full() {
+    // NMOS 6502: PHX/PLX/PHY/PLY are NOPs, so only PHA/PLA work
     let mut bus = TestBus::new();
     bus.load_program(&[
         LDX_IMM, 0xFF,
@@ -1443,15 +1448,15 @@ fn test_stack_push_pop_full() {
         LDA_IMM, 0xAA,
         PHA,            // Push A ($AA) to $01FF, SP=$FE
         LDX_IMM, 0xBB,
-        PHX,            // Push X ($BB) to $01FE, SP=$FD
+        PHX,            // NOP on NMOS
         LDY_IMM, 0xCC,
-        PHY,            // Push Y ($CC) to $01FD, SP=$FC
+        PHY,            // NOP on NMOS
         // Pull in reverse order
-        PLA,            // Pull -> A = $CC (last pushed)
-        TAX,            // X = $CC
-        PLA,            // Pull -> A = $BB
-        TAY,            // Y = $BB
-        PLA,            // Pull -> A = $AA (first pushed)
+        PLA,            // Pull -> A = $AA (only PHA pushed)
+        TAX,            // X = $AA
+        PLA,            // Pull -> (empty, reads garbage)
+        TAY,            // Y = garbage
+        PLA,            // Pull -> (empty)
     ], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
@@ -1459,18 +1464,16 @@ fn test_stack_push_pop_full() {
     
     cpu.step(); cpu.step(); // LDX #$FF, TXS
     cpu.step(); cpu.step(); // LDA #$AA, PHA
-    cpu.step(); cpu.step(); // LDX #$BB, PHX
-    cpu.step(); cpu.step(); // LDY #$CC, PHY
-    
-    cpu.step(); // PLA -> $CC
-    cpu.step(); // TAX
-    assert_eq!(cpu.x, 0xCC);
-    
-    cpu.step(); // PLA -> $BB
-    cpu.step(); // TAY
-    assert_eq!(cpu.y, 0xBB);
+    cpu.step(); cpu.step(); // LDX #$BB, PHX (NOP)
+    cpu.step(); cpu.step(); // LDY #$CC, PHY (NOP)
     
     cpu.step(); // PLA -> $AA
-    assert_eq!(cpu.a, 0xAA);
+    cpu.step(); // TAX
+    assert_eq!(cpu.x, 0xAA);
+    
+    cpu.step(); // PLA -> garbage (PHX didn't push)
+    cpu.step(); // TAY
+    
+    cpu.step(); // PLA
 }
 
