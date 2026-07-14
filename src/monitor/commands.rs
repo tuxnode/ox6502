@@ -153,4 +153,17 @@ impl Monitor {
             }
         }
     }
+
+    pub fn cmd_trace(&self, count: Option<usize>) {
+        let total = self.trace.len();
+        if total == 0 {
+            println!("No trace entries");
+            return;
+        }
+        let n = count.unwrap_or(total).min(total);
+        let start = total - n;
+        for entry in self.trace.iter().skip(start) {
+            println!("{:04X}  {:<24} (+{} cycles)", entry.addr, entry.text, entry.cycles);
+        }
+    }
 }
