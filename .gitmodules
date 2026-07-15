@@ -1,0 +1,3 @@
+[submodule "tests/sst_tests"]
+	path = tests/sst_tests
+	url = https://github.com/SingleStepTests/ProcessorTests
