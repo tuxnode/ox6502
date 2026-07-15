@@ -8,10 +8,13 @@ MOS 6502 / CMOS W65C02 CPU emulator. Single Rust crate, edition 2024.
 cargo build          # build
 cargo test           # run all unit + integration tests
 cargo run -- tests/roms/6502_functional_test.bin   # run Klaus Dormann 6502 test ROM
+cargo run -- tests/roms/65C02_extended_opcodes_test.bin   # run 65C02 extended test
 cargo run -- tests/roms/6502_functional_test.bin --debug   # interactive monitor
 ```
 
 No dev-dependencies, no formatter/linter config, no CI. Just `cargo build` and `cargo test`.
+
+Dependencies: `serde` + `serde_json` (for SST JSON test deserialization in `tests/sst_tests.rs`).
 
 ## Architecture
 
@@ -49,6 +52,8 @@ Missing: 9 unstable illegal opcodes (XAA, AHX, TAS, SHY, SHX, LAX#, AXS, SBC#), 
 
 **247/256 opcodes pass** (96.5%). Remaining 9 are unstable opcodes with behavior that varies by CPU revision.
 
+SST tests are in `tests/sst_tests.rs` and use JSON fixtures from `tests/sst_tests/nes6502/v1/`. Each opcode has 10,000 randomized test cases.
+
 ## Monitor Usage
 
 ```bash
@@ -67,3 +72,5 @@ Commands: `s`/step, `c`/continue, `r`/regs, `d`/disassemble, `m`/memory, `b`/bre
 ## Test Pattern
 
 Tests use a `TestBus` struct (64KB memory) with `load_program(code, start_addr)`. The helper `create_test_cpu()` sets reset vector to `$0400`. Write test ROM bytes inline, call `cpu.step()`, assert registers/flags.
+
+To run a single SST test: `cargo test test_sst_00` (or any hex opcode like `test_sst_ff`).
