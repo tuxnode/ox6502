@@ -65,11 +65,11 @@ impl<B: Bus> Cpu<B> {
     }
 
     pub fn read(&mut self, addr: u16) -> u8 {
-        self.bus.read(addr)
+        self.bus.cpu_read(addr)
     }
 
     pub(crate) fn write(&mut self, addr: u16, val: u8) {
-        self.bus.write(addr, val);
+        self.bus.cpu_write(addr, val);
     }
 
     // Basic Instructions Dependences
