@@ -28,13 +28,19 @@ impl TestBus {
 }
 
 impl Bus for TestBus {
-    fn read(&mut self, addr: u16) -> u8 {
+    fn cpu_read(&mut self, addr: u16) -> u8 {
         self.memory[addr as usize]
     }
 
-    fn write(&mut self, addr: u16, val: u8) {
+    fn cpu_write(&mut self, addr: u16, val: u8) {
         self.memory[addr as usize] = val;
     }
+
+    fn ppu_read(&mut self, _addr: u16) -> u8 {
+        0
+    }
+
+    fn ppu_write(&mut self, _addr: u16, _val: u8) {}
 }
 
 // Helper to create a CPU with reset vector pointing to $0400
