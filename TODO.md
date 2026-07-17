@@ -1,8 +1,10 @@
 # TODO
 
 ## 已完成
+
+### CPU 核心
 - [x] 项目结构（main.rs, cpu.rs, bus/, opcodes.rs, addressing.rs, instructions.rs）
-- [x] Bus trait 定义
+- [x] Bus trait 定义（cpu_read/write, ppu_read/write, tick）
 - [x] SimpleBus 实现（64KB 内存 + load 方法）
 - [x] CPU 结构体（寄存器 A/X/Y/SP/PC/Status）
 - [x] 状态寄存器 flag 常量（FLAG_C/Z/I/D/B/V/N）
@@ -54,7 +56,38 @@
   - [x] 空回车重复上一条命令
   - [x] main.rs 集成（--debug 参数）
 
+### NES 系统
+- [x] iNES 卡带解析器（header flags, PRG ROM, CHR ROM, mirroring）
+- [x] NES Bus 地址路由（CPU 内存映射）
+  - [x] $0000-$1FFF 内部 RAM（2KB 镜像）
+  - [x] $2000-$3FFF PPU 寄存器（委托给 PPU）
+  - [x] $4014 OAM DMA（读取 CPU page → 写入 PPU OAM）
+  - [x] $6000-$7FFF 卡带 PRG RAM
+  - [x] $8000-$FFFF 卡带 PRG ROM（NROM 镜像）
+- [x] PPU 寄存器接口（$2000-$2007）
+  - [x] $2000 PPUCTRL（NMI 使能、pattern table 选择、VRAM 增量）
+  - [x] $2001 PPUMASK（灰度、左 8px 裁剪、BG/Sprite 显示）
+  - [x] $2002 PPUSTATUS（vblank、sprite 0 hit、overflow）
+  - [x] $2003 OAMADDR / $2004 OAMDATA
+  - [x] $2005 PPUSCROLL（loopy 寄存器：coarse X/Y, fine X/Y）
+  - [x] $2006 PPUADDR（loopy 寄存器：v/t 地址）
+  - [x] $2007 PPUDATA（读缓冲、地址自增）
+- [x] PPU 内部 VRAM 地址系统（loopy v/t/x/w 寄存器）
+- [x] PPU 内存读写（ppu_read/ppu_write）
+  - [x] $0000-$1FFF 图案表（来自卡带 CHR ROM）
+  - [x] $2000-$2FFF Nametable（2KB VRAM）
+  - [x] $3000-$3EFF Nametable 镜像
+  - [x] $3F00-$3FFF 调色板（含 $3F10 镜像）
+- [x] OAM DMA（$4014 端口，513/514 周期惩罚）
+- [x] NMI 中断处理（$FFFA-$FFFB 向量）
+- [x] CPU 主循环（run_nes：step + tick + DMA/NMI）
+
 ## 待实现
+
+### CPU 精确周期
+- [ ] 跨页检测（absolute_x/y 跨页 +1 周期）
+- [ ] 分支跳转成功 +1 周期
+- [ ] 所有指令精确周期表
 
 ### SST 未通过的 opcode（9 个，行为因 CPU 版本而异）
 - [ ] XAA（0x8B）— 不稳定，行为因 CPU 版本而异
@@ -66,7 +99,30 @@
 - [ ] AXS/CMP（0xCB）— 需要调整标志位
 - [ ] SBC #（0xEB）— 替代编码，需要验证标志位
 
-### 精确周期模拟
-- [ ] 跨页检测（absolute_x/y 跨页 +1 周期）
-- [ ] 分支跳转成功 +1 周期
-- [ ] 所有指令精确周期表
+### PPU 渲染
+- [ ] 扫描线渲染循环（262 扫描线/帧）
+- [ ] 背景渲染（nametable fetch → attribute table → pattern table → shift register）
+- [ ] 精灵渲染（OAM 评估 → pattern fetch → priority）
+- [ ] Sprite 0 Hit 检测
+- [ ] 精灵溢出检测
+- [ ] 滚动实现（coarse/fine X/Y + nametable 切换）
+- [ ] 帧缓冲输出（RGB 像素数组）
+- [ ] NMI 时序（scanline 241 触发，scanline 261 清除）
+
+### Mapper
+- [ ] Mapper trait 定义（cpu_read/write, ppu_read/write, mirroring, irq）
+- [ ] NROM（mapper 0）— 无 bank switching，16KB/32KB PRG ROM
+- [ ] MMC1（mapper 1）— bank switching + 可切换镜像
+
+### APU
+- [ ] APU 寄存器接口（$4000-$4017）
+- [ ] 矩形波通道（Pulse 1/2）
+- [ ] 三角波通道（Triangle）
+- [ ] 噪声通道（Noise）
+- [ ] DMC 通道（Delta Modulation）
+
+### 系统集成
+- [ ] NES 主循环（CPU + PPU 同步运行）
+- [ ] SDL2/像素输出窗口
+- [ ] .nes 文件加载
+- [ ] 游戏手柄输入（$4016/$4017）
