@@ -34,15 +34,17 @@ pub struct Ppu {
     oam_addr: u8,  // $2003 OAMADDR (write only)
     scroll_lo: u8, // $2005 first write (lo)
     scroll_hi: u8, // $2005 second write (hi)
-    addr_lo: u8,   // $2006 first write (lo)
-    addr_hi: u8,   // $2006 second write (hi)
 
-    // Internal state for register write sequencing
-    write_latch: bool, // $2005/$2006 需要两次写入，用 latch 区分
+    // Internal address register (14-bit, set by $2006 two writes)
+    vram_addr: u16,
+    write_latch: bool, // $2005/$2006 双写 latch
+
+    // PPUDATA read buffer (NES PPU reads ahead one byte)
+    read_buffer: u8,
 
     // Internal memory
-    vram: [u8; 2048],  // 2KB VRAM (nametables)
-    palette: [u8; 32], // Palette RAM
+    vram: [u8; 2048],  // 2KB VRAM (nametables $2000-$2FFF)
+    palette: [u8; 32], // Palette RAM ($3F00-$3F1F)
     oam: [u8; 256],    // OAM (Object Attribute Memory)
 
     // NMI output line (to CPU)
@@ -58,9 +60,9 @@ impl Ppu {
             oam_addr: 0,
             scroll_lo: 0,
             scroll_hi: 0,
-            addr_lo: 0,
-            addr_hi: 0,
+            vram_addr: 0,
             write_latch: false,
+            read_buffer: 0,
             vram: [0; 2048],
             palette: [0; 32],
             oam: [0; 256],
@@ -97,10 +99,12 @@ impl Ppu {
             // $2006 PPUADDR — write only
             6 => 0,
 
-            // $2007 PPUDATA — read VRAM
+            // $2007 PPUDATA — read VRAM with buffering
             7 => {
-                // TODO: implement VRAM read with buffering
-                0
+                let val = self.read_buffer;
+                self.read_buffer = self.read_vram();
+                self.increment_vram_addr();
+                val
             }
 
             _ => 0,
@@ -152,17 +156,18 @@ impl Ppu {
             // $2006 PPUADDR — two writes: lo, then hi
             6 => {
                 if !self.write_latch {
-                    self.addr_lo = val;
+                    self.vram_addr = (self.vram_addr & 0xFF00) | (val as u16);
                     self.write_latch = true;
                 } else {
-                    self.addr_hi = val;
+                    self.vram_addr = (self.vram_addr & 0x00FF) | ((val as u16) << 8);
                     self.write_latch = false;
                 }
             }
 
-            // $2007 PPUDATA — write VRAM
+            // $2007 PPUDATA — write VRAM, then auto-increment address
             7 => {
-                // TODO: implement VRAM write with address auto-increment
+                self.write_vram(val);
+                self.increment_vram_addr();
             }
 
             _ => {}
@@ -192,5 +197,55 @@ impl Ppu {
         } else {
             false
         }
+    }
+
+    /// Read byte from VRAM at internal address register
+    fn read_vram(&self) -> u8 {
+        let addr = self.vram_addr;
+        match addr {
+            // Pattern tables ($0000-$1FFF) — from cartridge CHR ROM/RAM
+            // TODO: delegate to cartridge when CHR support is added
+            0x0000..=0x1FFF => 0,
+
+            // Nametables ($2000-$2FFF) — internal VRAM
+            0x2000..=0x2FFF => self.vram[(addr & 0x0FFF) as usize],
+
+            // Palette ($3F00-$3F1F)
+            0x3F00..=0x3F1F => self.palette[(addr & 0x1F) as usize],
+
+            _ => 0,
+        }
+    }
+
+    /// Write byte to VRAM at internal address register
+    fn write_vram(&mut self, val: u8) {
+        let addr = self.vram_addr;
+        match addr {
+            // Pattern tables — read only from cartridge, ignore writes
+            0x0000..=0x1FFF => {}
+
+            // Nametables
+            0x2000..=0x2FFF => {
+                self.vram[(addr & 0x0FFF) as usize] = val;
+            }
+
+            // Palette
+            0x3F00..=0x3F1F => {
+                // 镜像: $3F10/$3F14/$3F18/$3F1C → $3F00/$3F04/$3F08/$3F0C
+                let mut index = (addr & 0x1F) as usize;
+                if index >= 0x10 && index % 4 == 0 {
+                    index -= 0x10;
+                }
+                self.palette[index] = val;
+            }
+
+            _ => {}
+        }
+    }
+
+    /// Auto-increment VRAM address by 1 or 32 (based on PPUCTRL bit 2)
+    fn increment_vram_addr(&mut self) {
+        let increment = if (self.ctrl & CTRL_VRAM_INCR) != 0 { 32 } else { 1 };
+        self.vram_addr = self.vram_addr.wrapping_add(increment);
     }
 }
