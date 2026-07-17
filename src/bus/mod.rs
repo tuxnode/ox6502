@@ -5,4 +5,5 @@ pub trait Bus {
     fn ppu_write(&mut self, addr: u16, val: u8);
 }
 
+pub mod nes;
 pub mod simple;
