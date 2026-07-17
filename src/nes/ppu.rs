@@ -248,4 +248,13 @@ impl Ppu {
         let increment = if (self.ctrl & CTRL_VRAM_INCR) != 0 { 32 } else { 1 };
         self.vram_addr = self.vram_addr.wrapping_add(increment);
     }
+
+    /// OAM DMA: copy 256 bytes to OAM starting at current oam_addr
+    /// Called when CPU writes to $4014
+    pub fn dma_write_oam(&mut self, page_data: &[u8; 256]) {
+        let base = self.oam_addr as usize;
+        for i in 0..256u16 {
+            self.oam[((base + i as usize) & 0xFF)] = page_data[i as usize];
+        }
+    }
 }

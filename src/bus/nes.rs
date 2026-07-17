@@ -2,17 +2,13 @@
  * NES Dev CPU Memory Map: https://www.nesdev.org/wiki/CPU_memory_map
  * NES Dev PPU Memory Map: https://www.nesdev.org/wiki/PPU_memory_map
  */
-use crate::{bus::Bus, nes::cartridge::Cartridge};
+use crate::{bus::Bus, nes::cartridge::Cartridge, nes::ppu::Ppu};
 
 pub struct NesBus {
     ram: [u8; 2048],       // 2KB internal RAM
     prg_ram: [u8; 0x2000], // 8KB PRG RAM ($6000-$7FFF)
     cartridge: Cartridge,
-
-    // PPU (stub for now)
-    vram: [u8; 2048],
-    palette: [u8; 32],
-    oam: [u8; 256],
+    pub ppu: Ppu,          // PPU instance
 }
 
 impl NesBus {
@@ -21,9 +17,7 @@ impl NesBus {
             ram: [0; 2048],
             prg_ram: [0; 0x2000],
             cartridge,
-            vram: [0; 2048],
-            palette: [0; 32],
-            oam: [0; 256],
+            ppu: Ppu::new(),
         }
     }
 }
@@ -35,8 +29,7 @@ impl Bus for NesBus {
             0x0000..=0x1FFF => self.ram[(addr & 0x07FF) as usize],
 
             // PPU registers: 8 bytes, mirrored every 8 bytes up to $3FFF
-            // PPU not implemented yet, return 0
-            0x2000..=0x3FFF => 0,
+            0x2000..=0x3FFF => self.ppu.read_register(addr),
 
             // APU and I/O registers
             0x4000..=0x4017 => 0,
@@ -65,13 +58,26 @@ impl Bus for NesBus {
                 self.ram[(addr & 0x07FF) as usize] = val;
             }
 
-            // TODO: PPU registers (stub)
-            0x2000..=0x3FFF => {}
+            // PPU registers
+            0x2000..=0x3FFF => {
+                self.ppu.write_register(addr, val);
+            }
 
-            // TODO: APU and I/O (stub)
+            // OAM DMA: writing page number triggers 256-byte copy
+            0x4014 => {
+                let page = val as u16;
+                let base = page << 8;
+                let mut page_data = [0u8; 256];
+                for i in 0..256u16 {
+                    page_data[i as usize] = self.cpu_read(base + i);
+                }
+                self.ppu.dma_write_oam(&page_data);
+            }
+
+            // APU and I/O (stub)
             0x4000..=0x4017 => {}
 
-            // TODO: APU test mode (stub)
+            // APU test mode (stub)
             0x4018..=0x401F => {}
 
             // Cartridge PRG RAM
@@ -79,7 +85,7 @@ impl Bus for NesBus {
                 self.prg_ram[(addr - 0x6000) as usize] = val;
             }
 
-            // TODO: PRG ROM is read-only, ignore writes
+            // PRG ROM is read-only, ignore writes
             0x8000..=0xFFFF => {}
 
             _ => {}
@@ -90,7 +96,5 @@ impl Bus for NesBus {
         0
     }
 
-    fn ppu_write(&mut self, _addr: u16, _val: u8) {
-        0
-    }
+    fn ppu_write(&mut self, _addr: u16, _val: u8) {}
 }
