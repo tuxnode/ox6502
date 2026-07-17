@@ -43,6 +43,7 @@ pub struct Ppu {
     read_buffer: u8,
 
     // Internal memory
+    chr_rom: Vec<u8>,   // Pattern tables from cartridge CHR ROM
     vram: [u8; 2048],  // 2KB VRAM (nametables $2000-$2FFF)
     palette: [u8; 32], // Palette RAM ($3F00-$3F1F)
     oam: [u8; 256],    // OAM (Object Attribute Memory)
@@ -52,7 +53,7 @@ pub struct Ppu {
 }
 
 impl Ppu {
-    pub fn new() -> Self {
+    pub fn new(chr_rom: Vec<u8>) -> Self {
         Self {
             ctrl: 0,
             mask: 0,
@@ -63,6 +64,7 @@ impl Ppu {
             vram_addr: 0,
             write_latch: false,
             read_buffer: 0,
+            chr_rom,
             vram: [0; 2048],
             palette: [0; 32],
             oam: [0; 256],
@@ -102,7 +104,7 @@ impl Ppu {
             // $2007 PPUDATA — read VRAM with buffering
             7 => {
                 let val = self.read_buffer;
-                self.read_buffer = self.read_vram();
+                self.read_buffer = self.ppu_read(self.vram_addr);
                 self.increment_vram_addr();
                 val
             }
@@ -166,7 +168,7 @@ impl Ppu {
 
             // $2007 PPUDATA — write VRAM, then auto-increment address
             7 => {
-                self.write_vram(val);
+                self.ppu_write(self.vram_addr, val);
                 self.increment_vram_addr();
             }
 
@@ -199,39 +201,56 @@ impl Ppu {
         }
     }
 
-    /// Read byte from VRAM at internal address register
-    fn read_vram(&self) -> u8 {
-        let addr = self.vram_addr;
+    /// Read byte from PPU address space
+    pub fn ppu_read(&self, addr: u16) -> u8 {
         match addr {
-            // Pattern tables ($0000-$1FFF) — from cartridge CHR ROM/RAM
-            // TODO: delegate to cartridge when CHR support is added
-            0x0000..=0x1FFF => 0,
+            // Pattern tables ($0000-$1FFF) — from cartridge CHR ROM
+            0x0000..=0x1FFF => {
+                if (addr as usize) < self.chr_rom.len() {
+                    self.chr_rom[addr as usize]
+                } else {
+                    0
+                }
+            }
 
-            // Nametables ($2000-$2FFF) — internal VRAM
+            // Nametables ($2000-$2FFF) — internal VRAM with mirroring
             0x2000..=0x2FFF => self.vram[(addr & 0x0FFF) as usize],
 
-            // Palette ($3F00-$3F1F)
-            0x3F00..=0x3F1F => self.palette[(addr & 0x1F) as usize],
+            // Nametable mirrors ($3000-$3EFF)
+            0x3000..=0x3EFF => self.vram[((addr - 0x1000) & 0x0FFF) as usize],
+
+            // Palette ($3F00-$3F1F) with mirrors
+            0x3F00..=0x3FFF => {
+                let mut index = (addr & 0x1F) as usize;
+                // 镜像: $3F10/$3F14/$3F18/$3F1C → $3F00/$3F04/$3F08/$3F0C
+                if index >= 0x10 && index % 4 == 0 {
+                    index -= 0x10;
+                }
+                self.palette[index]
+            }
 
             _ => 0,
         }
     }
 
-    /// Write byte to VRAM at internal address register
-    fn write_vram(&mut self, val: u8) {
-        let addr = self.vram_addr;
+    /// Write byte to PPU address space
+    pub fn ppu_write(&mut self, addr: u16, val: u8) {
         match addr {
-            // Pattern tables — read only from cartridge, ignore writes
+            // Pattern tables — read only, ignore writes
             0x0000..=0x1FFF => {}
 
-            // Nametables
+            // Nametables ($2000-$2FFF)
             0x2000..=0x2FFF => {
                 self.vram[(addr & 0x0FFF) as usize] = val;
             }
 
-            // Palette
-            0x3F00..=0x3F1F => {
-                // 镜像: $3F10/$3F14/$3F18/$3F1C → $3F00/$3F04/$3F08/$3F0C
+            // Nametable mirrors ($3000-$3EFF)
+            0x3000..=0x3EFF => {
+                self.vram[((addr - 0x1000) & 0x0FFF) as usize] = val;
+            }
+
+            // Palette ($3F00-$3F1F) with mirrors
+            0x3F00..=0x3FFF => {
                 let mut index = (addr & 0x1F) as usize;
                 if index >= 0x10 && index % 4 == 0 {
                     index -= 0x10;

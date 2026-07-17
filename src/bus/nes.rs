@@ -14,11 +14,12 @@ pub struct NesBus {
 
 impl NesBus {
     pub fn new(cartridge: Cartridge) -> Self {
+        let chr_rom = cartridge.chr_rom.clone();
         Self {
             ram: [0; 2048],
             prg_ram: [0; 0x2000],
             cartridge,
-            ppu: Ppu::new(),
+            ppu: Ppu::new(chr_rom),
             dma_cycles: 0,
         }
     }
@@ -114,10 +115,12 @@ impl Bus for NesBus {
     }
 
     fn ppu_read(&mut self, addr: u16) -> u8 {
-        0
+        self.ppu.ppu_read(addr)
     }
 
-    fn ppu_write(&mut self, _addr: u16, _val: u8) {}
+    fn ppu_write(&mut self, addr: u16, val: u8) {
+        self.ppu.ppu_write(addr, val);
+    }
 
     fn tick(&mut self) -> TickResult {
         let extra = self.take_dma_cycles();
