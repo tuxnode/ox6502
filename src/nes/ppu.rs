@@ -32,12 +32,16 @@ pub struct Ppu {
     mask: u8,      // $2001 PPUMASK (write only)
     status: u8,    // $2002 PPUSTATUS (read only)
     pub oam_addr: u8,  // $2003 OAMADDR (write only)
-    scroll_lo: u8, // $2005 first write (lo)
-    scroll_hi: u8, // $2005 second write (hi)
 
-    // Internal address register (14-bit, set by $2006 two writes)
-    vram_addr: u16,
-    write_latch: bool, // $2005/$2006 双写 latch
+    // Loopy registers (internal VRAM address system)
+    // v: current VRAM address (15-bit, used for reads/writes)
+    // t: temporary VRAM address (15-bit, used for scroll/addr setup)
+    // x: fine X scroll (3-bit)
+    // w: write toggle (1-bit, alternates between first/second write)
+    v: u16,        // current VRAM address
+    t: u16,        // temporary VRAM address
+    x: u8,         // fine X scroll (0-7)
+    w: bool,       // write toggle
 
     // PPUDATA read buffer (NES PPU reads ahead one byte)
     read_buffer: u8,
@@ -59,10 +63,10 @@ impl Ppu {
             mask: 0,
             status: 0,
             oam_addr: 0,
-            scroll_lo: 0,
-            scroll_hi: 0,
-            vram_addr: 0,
-            write_latch: false,
+            v: 0,
+            t: 0,
+            x: 0,
+            w: false,
             read_buffer: 0,
             chr_rom,
             vram: [0; 2048],
@@ -84,8 +88,8 @@ impl Ppu {
             // $2002 PPUSTATUS — read clears vblank flag and resets write latch
             2 => {
                 let val = self.status;
-                self.status &= !STATUS_VBLANK; // 清除 vblank 标志
-                self.write_latch = false; // 重置 latch
+                self.status &= !STATUS_VBLANK;
+                self.w = false;
                 val
             }
 
@@ -103,8 +107,9 @@ impl Ppu {
 
             // $2007 PPUDATA — read VRAM with buffering
             7 => {
+                let addr = self.v;
                 let val = self.read_buffer;
-                self.read_buffer = self.ppu_read(self.vram_addr);
+                self.read_buffer = self.ppu_read(addr);
                 self.increment_vram_addr();
                 val
             }
@@ -120,6 +125,8 @@ impl Ppu {
             0 => {
                 let old_nmi = self.ctrl & CTRL_NMI_ENABLE;
                 self.ctrl = val;
+                // Bits 0-1 of ctrl go into t bits 10-11
+                self.t = (self.t & 0xF3FF) | ((val as u16 & 0x03) << 10);
                 // 如果之前 NMI 禁用，现在启用，且当前处于 vblank，触发 NMI
                 if old_nmi == 0
                     && (val & CTRL_NMI_ENABLE) != 0
@@ -144,31 +151,44 @@ impl Ppu {
                 self.oam_addr = self.oam_addr.wrapping_add(1);
             }
 
-            // $2005 PPUSCROLL — two writes: lo, then hi
+            // $2005 PPUSCROLL — two writes sharing latch with $2006
+            // First write: coarse X (bits 0-4) and fine X (bits 0-2)
+            // Second write: coarse Y (bits 0-4) and fine Y (bits 0-2)
             5 => {
-                if !self.write_latch {
-                    self.scroll_lo = val;
-                    self.write_latch = true;
+                if !self.w {
+                    // First write: X scroll
+                    self.t = (self.t & 0xFFE0) | ((val as u16) & 0x1F);
+                    self.x = val & 0x07;
+                    self.w = true;
                 } else {
-                    self.scroll_hi = val;
-                    self.write_latch = false;
+                    // Second write: Y scroll
+                    self.t = (self.t & 0x0C1F)
+                        | ((val as u16 & 0x07) << 12)      // fine Y -> bits 12-14
+                        | ((val as u16 & 0xF8) << 2);      // coarse Y -> bits 5-9
+                    self.w = false;
                 }
             }
 
-            // $2006 PPUADDR — two writes: lo, then hi
+            // $2006 PPUADDR — two writes sharing latch with $2005
+            // First write: upper 6 bits of address
+            // Second write: lower 8 bits of address, then copy t -> v
             6 => {
-                if !self.write_latch {
-                    self.vram_addr = (self.vram_addr & 0xFF00) | (val as u16);
-                    self.write_latch = true;
+                if !self.w {
+                    // First write: upper address bits
+                    self.t = (self.t & 0x00FF) | ((val as u16 & 0x3F) << 8);
+                    self.w = true;
                 } else {
-                    self.vram_addr = (self.vram_addr & 0x00FF) | ((val as u16) << 8);
-                    self.write_latch = false;
+                    // Second write: lower address bits, then copy t -> v
+                    self.t = (self.t & 0xFF00) | (val as u16);
+                    self.v = self.t;
+                    self.w = false;
                 }
             }
 
             // $2007 PPUDATA — write VRAM, then auto-increment address
             7 => {
-                self.ppu_write(self.vram_addr, val);
+                let addr = self.v;
+                self.ppu_write(addr, val);
                 self.increment_vram_addr();
             }
 
@@ -265,7 +285,7 @@ impl Ppu {
     /// Auto-increment VRAM address by 1 or 32 (based on PPUCTRL bit 2)
     fn increment_vram_addr(&mut self) {
         let increment = if (self.ctrl & CTRL_VRAM_INCR) != 0 { 32 } else { 1 };
-        self.vram_addr = self.vram_addr.wrapping_add(increment);
+        self.v = self.v.wrapping_add(increment);
     }
 
     /// OAM DMA: copy 256 bytes to OAM starting at current oam_addr
@@ -275,5 +295,30 @@ impl Ppu {
         for i in 0..256u16 {
             self.oam[((base + i as usize) & 0xFF)] = page_data[i as usize];
         }
+    }
+
+    /// Check if background or sprite rendering is enabled
+    pub fn rendering_enabled(&self) -> bool {
+        (self.mask & MASK_SHOW_BG) != 0 || (self.mask & MASK_SHOW_SPR) != 0
+    }
+
+    /// Get current VRAM address (for rendering)
+    pub fn vram_addr(&self) -> u16 {
+        self.v
+    }
+
+    /// Get fine X scroll (for rendering)
+    pub fn fine_x(&self) -> u8 {
+        self.x
+    }
+
+    /// Get PPUCTRL value (for pattern table selection)
+    pub fn ctrl(&self) -> u8 {
+        self.ctrl
+    }
+
+    /// Copy t to v (used at end of vblank / start of rendering)
+    pub fn copy_t_to_v(&mut self) {
+        self.v = self.t;
     }
 }
