@@ -5,7 +5,7 @@
 // - W65C02S Programming Manual：https://www.westerndesigncenter.com/wdc/documentation/w65c02-programming-manual.pdf
 
 use crate::bus::Bus;
-use crate::instructions::{FLAG_C, FLAG_I, FLAG_N, FLAG_Z};
+use crate::instructions::{FLAG_C, FLAG_B, FLAG_I, FLAG_N, FLAG_Z};
 
 pub struct Cpu<B: Bus> {
     pub a: u8, // Accumulator Register
@@ -89,5 +89,35 @@ impl<B: Bus> Cpu<B> {
         let result = reg.wrapping_sub(val);
         self.set_flag(FLAG_C, reg >= val);
         self.update_nz(result);
+    }
+
+    /// Handle NMI interrupt (similar to BRK but uses $FFFA-$FFFB vector)
+    pub fn handle_nmi(&mut self) {
+        self.push((self.pc >> 8) as u8);
+        self.push(self.pc as u8);
+        // NMI pushes status with B=0, unlike BRK which sets B=1
+        self.push(self.status & !FLAG_B);
+        self.set_flag(FLAG_I, true);
+        let lo = self.read(0xFFFA) as u16;
+        let hi = self.read(0xFFFB) as u16;
+        self.pc = (hi << 8) | lo;
+        self.cycles += 7;
+    }
+
+    /// NES-specific run loop with DMA and NMI support
+    pub fn run_nes(&mut self) {
+        loop {
+            let step_cycles = self.step() as u64;
+            self.cycles += step_cycles;
+
+            // Tick bus: get DMA cycles and check NMI
+            let tick = self.bus.tick();
+            self.cycles += tick.extra_cycles as u64;
+
+            // Handle NMI (cannot be interrupted if I flag is set)
+            if tick.nmi && !self.get_flag(FLAG_I) {
+                self.handle_nmi();
+            }
+        }
     }
 }

@@ -2,13 +2,14 @@
  * NES Dev CPU Memory Map: https://www.nesdev.org/wiki/CPU_memory_map
  * NES Dev PPU Memory Map: https://www.nesdev.org/wiki/PPU_memory_map
  */
-use crate::{bus::Bus, nes::cartridge::Cartridge, nes::ppu::Ppu};
+use crate::{bus::{Bus, TickResult}, nes::cartridge::Cartridge, nes::ppu::Ppu};
 
 pub struct NesBus {
     ram: [u8; 2048],       // 2KB internal RAM
     prg_ram: [u8; 0x2000], // 8KB PRG RAM ($6000-$7FFF)
     cartridge: Cartridge,
     pub ppu: Ppu,          // PPU instance
+    dma_cycles: u32,       // DMA pending cycles (0 = no DMA)
 }
 
 impl NesBus {
@@ -18,7 +19,25 @@ impl NesBus {
             prg_ram: [0; 0x2000],
             cartridge,
             ppu: Ppu::new(),
+            dma_cycles: 0,
         }
+    }
+
+    /// Take pending DMA cycles (resets to 0)
+    pub fn take_dma_cycles(&mut self) -> u32 {
+        let c = self.dma_cycles;
+        self.dma_cycles = 0;
+        c
+    }
+
+    /// Check if PPU has a pending NMI
+    pub fn check_nmi(&mut self) -> bool {
+        self.ppu.take_nmi()
+    }
+
+    /// Advance PPU by one CPU cycle (placeholder for rendering)
+    pub fn tick_ppu(&mut self) {
+        // TODO: PPU rendering cycle advance
     }
 }
 
@@ -72,6 +91,8 @@ impl Bus for NesBus {
                     page_data[i as usize] = self.cpu_read(base + i);
                 }
                 self.ppu.dma_write_oam(&page_data);
+                // DMA takes 513 cycles if OAMADDR even, 514 if odd
+                self.dma_cycles = if self.ppu.oam_addr % 2 == 0 { 513 } else { 514 };
             }
 
             // APU and I/O (stub)
@@ -97,4 +118,14 @@ impl Bus for NesBus {
     }
 
     fn ppu_write(&mut self, _addr: u16, _val: u8) {}
+
+    fn tick(&mut self) -> TickResult {
+        let extra = self.take_dma_cycles();
+        let nmi = self.check_nmi();
+        self.tick_ppu();
+        TickResult {
+            extra_cycles: extra,
+            nmi,
+        }
+    }
 }

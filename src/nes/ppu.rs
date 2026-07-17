@@ -31,7 +31,7 @@ pub struct Ppu {
     ctrl: u8,      // $2000 PPUCTRL (write only)
     mask: u8,      // $2001 PPUMASK (write only)
     status: u8,    // $2002 PPUSTATUS (read only)
-    oam_addr: u8,  // $2003 OAMADDR (write only)
+    pub oam_addr: u8,  // $2003 OAMADDR (write only)
     scroll_lo: u8, // $2005 first write (lo)
     scroll_hi: u8, // $2005 second write (hi)
 
