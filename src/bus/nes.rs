@@ -5,6 +5,7 @@
 use crate::{
     bus::{Bus, TickResult},
     nes::cartridge::Cartridge,
+    nes::joypad::Joypad,
     nes::ppu::Ppu,
 };
 
@@ -12,8 +13,10 @@ pub struct NesBus {
     ram: [u8; 2048],       // 2KB internal RAM
     prg_ram: [u8; 0x2000], // 8KB PRG RAM ($6000-$7FFF)
     cartridge: Cartridge,
-    pub ppu: Ppu,    // PPU instance
-    dma_cycles: u32, // DMA pending cycles (0 = no DMA)
+    pub ppu: Ppu,          // PPU instance
+    pub joypad1: Joypad,   // Player 1 controller
+    joypad2: Joypad,       // Player 2 controller
+    dma_cycles: u32,       // DMA pending cycles (0 = no DMA)
 }
 
 impl NesBus {
@@ -24,6 +27,8 @@ impl NesBus {
             prg_ram: [0; 0x2000],
             cartridge,
             ppu: Ppu::new(chr_rom),
+            joypad1: Joypad::new(),
+            joypad2: Joypad::new(),
             dma_cycles: 0,
         }
     }
@@ -57,8 +62,12 @@ impl Bus for NesBus {
             // PPU registers: 8 bytes, mirrored every 8 bytes up to $3FFF
             0x2000..=0x3FFF => self.ppu.read_register(addr),
 
-            // APU and I/O registers
-            0x4000..=0x4017 => 0,
+            // Joypad 1 ($4016)
+            0x4016 => self.joypad1.read(),
+            // Joypad 2 ($4017)
+            0x4017 => self.joypad2.read(),
+            // Other APU and I/O registers
+            0x4000..=0x4015 | 0x4018..=0x401F => 0,
 
             // APU test mode (normally disabled)
             0x4018..=0x401F => 0,
@@ -102,11 +111,10 @@ impl Bus for NesBus {
                 self.dma_cycles = if self.ppu.oam_addr % 2 == 0 { 513 } else { 514 };
             }
 
+            // Joypad strobe ($4016 write)
+            0x4016 => self.joypad1.write(val),
             // APU and I/O (stub)
-            0x4000..=0x4017 => {}
-
-            // APU test mode (stub)
-            0x4018..=0x401F => {}
+            0x4000..=0x4015 | 0x4017..=0x401F => {}
 
             // Cartridge PRG RAM
             0x6000..=0x7FFF => {
