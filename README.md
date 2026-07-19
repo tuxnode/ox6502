@@ -3,6 +3,9 @@
 MOS 6502 / CMOS W65C02 CPU emulator with NES system emulation, written in Rust.
 
 ![MOS 6502](https://www.masswerk.at/6502/assets/MOS_6502AD_4585.jpg)
+![ox6502 NES](screenshot/1.png) ![ox6502 NES](screenshot/2.png)
+
+
 
 ## Features
 
