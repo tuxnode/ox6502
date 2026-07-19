@@ -142,6 +142,8 @@ impl Bus for NesBus {
     }
 
     fn tick(&mut self, cpu_cycles: u8) -> TickResult {
+        // Sync mirroring from mapper to PPU
+        self.ppu.set_mirroring(self.mapper.mirroring());
         // Advance PPU first (may set nmi_pending when entering VBlank)
         self.tick_ppu(cpu_cycles);
         // Then check for NMI

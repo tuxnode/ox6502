@@ -111,7 +111,7 @@
 ### Mapper
 - [x] Mapper trait 定义（cpu_read/write, ppu_read/write, mirroring）
 - [x] NROM（mapper 0）— 无 bank switching，16KB/32KB PRG ROM
-- [ ] MMC1（mapper 1）— bank switching + 可切换镜像
+- [x] MMC1（mapper 1）— bank switching + 可切换镜像
 
 ### APU
 - [ ] APU 寄存器接口（$4000-$4017）

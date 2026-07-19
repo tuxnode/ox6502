@@ -1,3 +1,4 @@
+use crate::nes::cartridge::Mirroring;
 use crate::nes::palette;
 
 /**
@@ -66,6 +67,9 @@ pub struct Ppu {
 
     // NMI output line (to CPU)
     pub nmi_pending: bool,
+
+    // Nametable mirroring mode (from mapper)
+    mirroring: Mirroring,
 }
 
 impl Ppu {
@@ -89,6 +93,7 @@ impl Ppu {
             palette: [0; 32],
             oam: [0; 256],
             nmi_pending: false,
+            mirroring: Mirroring::Horizontal,
         }
     }
 
@@ -273,10 +278,16 @@ impl Ppu {
             }
 
             // Nametables ($2000-$2FFF) — internal VRAM with mirroring
-            0x2000..=0x2FFF => self.vram[(addr & 0x0FFF) as usize],
+            0x2000..=0x2FFF => {
+                let idx = self.mirror_nt_addr(addr);
+                self.vram[idx]
+            }
 
             // Nametable mirrors ($3000-$3EFF)
-            0x3000..=0x3EFF => self.vram[((addr - 0x1000) & 0x0FFF) as usize],
+            0x3000..=0x3EFF => {
+                let idx = self.mirror_nt_addr(addr - 0x1000);
+                self.vram[idx]
+            }
 
             // Palette ($3F00-$3F1F) with mirrors
             0x3F00..=0x3FFF => {
@@ -300,12 +311,14 @@ impl Ppu {
 
             // Nametables ($2000-$2FFF)
             0x2000..=0x2FFF => {
-                self.vram[(addr & 0x0FFF) as usize] = val;
+                let idx = self.mirror_nt_addr(addr);
+                self.vram[idx] = val;
             }
 
             // Nametable mirrors ($3000-$3EFF)
             0x3000..=0x3EFF => {
-                self.vram[((addr - 0x1000) & 0x0FFF) as usize] = val;
+                let idx = self.mirror_nt_addr(addr - 0x1000);
+                self.vram[idx] = val;
             }
 
             // Palette ($3F00-$3F1F) with mirrors
@@ -506,6 +519,32 @@ impl Ppu {
     /// Get PPUSTATUS value
     pub fn status(&self) -> u8 {
         self.status
+    }
+
+    /// Set nametable mirroring mode (called by Bus from mapper)
+    pub fn set_mirroring(&mut self, m: Mirroring) {
+        self.mirroring = m;
+    }
+
+    /// Translate VRAM address with current mirroring
+    fn mirror_nt_addr(&self, addr: u16) -> usize {
+        let nt = ((addr >> 10) & 0x03) as usize;
+        let offset = (addr & 0x03FF) as usize;
+        match self.mirroring {
+            Mirroring::Horizontal => match nt {
+                0 | 1 => offset,
+                2 | 3 => 0x400 + offset,
+                _ => unreachable!(),
+            },
+            Mirroring::Vertical => match nt {
+                0 | 2 => offset,
+                1 | 3 => 0x400 + offset,
+                _ => unreachable!(),
+            },
+            Mirroring::FourScreen => (addr as usize & 0x0FFF) % 2048,
+            Mirroring::OneScreenA => offset,
+            Mirroring::OneScreenB => 0x400 + offset,
+        }
     }
 
     /// Copy t to v (used at end of vblank / start of rendering)
