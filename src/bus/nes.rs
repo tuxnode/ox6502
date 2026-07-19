@@ -6,29 +6,31 @@ use crate::{
     bus::{Bus, TickResult},
     nes::cartridge::Cartridge,
     nes::joypad::Joypad,
+    nes::mapper,
+    nes::mapper::Mapper,
     nes::ppu::Ppu,
 };
 
 pub struct NesBus {
     ram: [u8; 2048],       // 2KB internal RAM
     prg_ram: [u8; 0x2000], // 8KB PRG RAM ($6000-$7FFF)
-    cartridge: Cartridge,
     pub ppu: Ppu,          // PPU instance
     pub joypad1: Joypad,   // Player 1 controller
     joypad2: Joypad,       // Player 2 controller
+    mapper: Box<dyn Mapper>,
     dma_cycles: u32,       // DMA pending cycles (0 = no DMA)
 }
 
 impl NesBus {
-    pub fn new(cartridge: Cartridge) -> Self {
-        let chr_rom = cartridge.chr_rom.clone();
+    pub fn new(cart: Cartridge) -> Self {
+        let chr_rom = cart.chr_rom.clone();
         Self {
             ram: [0; 2048],
             prg_ram: [0; 0x2000],
-            cartridge,
             ppu: Ppu::new(chr_rom),
             joypad1: Joypad::new(),
             joypad2: Joypad::new(),
+            mapper: mapper::from_cartridge(cart),
             dma_cycles: 0,
         }
     }
@@ -75,12 +77,8 @@ impl Bus for NesBus {
             // Cartridge PRG RAM ($6000-$7FFF)
             0x6000..=0x7FFF => self.prg_ram[(addr - 0x6000) as usize],
 
-            // Cartridge PRG ROM ($8000-$FFFF)
-            // NROM: 16KB mirrored to $C000-$FFFF, or 32KB full range
-            0x8000..=0xFFFF => {
-                let offset = (addr - 0x8000) as usize;
-                self.cartridge.prg_rom[offset % self.cartridge.prg_rom.len()]
-            }
+            // Cartridge PRG ROM via mapper ($8000-$FFFF)
+            0x8000..=0xFFFF => self.mapper.cpu_read(addr),
 
             _ => 0,
         }
@@ -121,19 +119,26 @@ impl Bus for NesBus {
                 self.prg_ram[(addr - 0x6000) as usize] = val;
             }
 
-            // PRG ROM is read-only, ignore writes
-            0x8000..=0xFFFF => {}
+            // Cartridge PRG ROM via mapper
+            0x8000..=0xFFFF => self.mapper.cpu_write(addr, val),
 
             _ => {}
         }
     }
 
     fn ppu_read(&mut self, addr: u16) -> u8 {
-        self.ppu.ppu_read(addr)
+        // Pattern tables come from mapper; everything else from PPU internal
+        match addr {
+            0x0000..=0x1FFF => self.mapper.ppu_read(addr),
+            _ => self.ppu.ppu_read(addr),
+        }
     }
 
     fn ppu_write(&mut self, addr: u16, val: u8) {
-        self.ppu.ppu_write(addr, val);
+        match addr {
+            0x0000..=0x1FFF => self.mapper.ppu_write(addr, val),
+            _ => self.ppu.ppu_write(addr, val),
+        }
     }
 
     fn tick(&mut self, cpu_cycles: u8) -> TickResult {

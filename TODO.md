@@ -62,8 +62,8 @@
   - [x] $0000-$1FFF 内部 RAM（2KB 镜像）
   - [x] $2000-$3FFF PPU 寄存器（委托给 PPU）
   - [x] $4014 OAM DMA（读取 CPU page → 写入 PPU OAM）
-  - [x] $6000-$7FFF 卡带 PRG RAM
-  - [x] $8000-$FFFF 卡带 PRG ROM（NROM 镜像）
+- [x] $6000-$7FFF 卡带 PRG RAM
+- [x] $8000-$FFFF 卡带 PRG ROM（通过 Mapper）
 - [x] PPU 寄存器接口（$2000-$2007）
   - [x] $2000 PPUCTRL（NMI 使能、pattern table 选择、VRAM 增量）
   - [x] $2001 PPUMASK（灰度、左 8px 裁剪、BG/Sprite 显示）
@@ -109,8 +109,8 @@
 - [X] NMI 时序（scanline 241 触发，scanline 261 清除）
 
 ### Mapper
-- [ ] Mapper trait 定义（cpu_read/write, ppu_read/write, mirroring, irq）
-- [ ] NROM（mapper 0）— 无 bank switching，16KB/32KB PRG ROM
+- [x] Mapper trait 定义（cpu_read/write, ppu_read/write, mirroring）
+- [x] NROM（mapper 0）— 无 bank switching，16KB/32KB PRG ROM
 - [ ] MMC1（mapper 1）— bank switching + 可切换镜像
 
 ### APU
