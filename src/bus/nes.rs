@@ -2,14 +2,18 @@
  * NES Dev CPU Memory Map: https://www.nesdev.org/wiki/CPU_memory_map
  * NES Dev PPU Memory Map: https://www.nesdev.org/wiki/PPU_memory_map
  */
-use crate::{bus::{Bus, TickResult}, nes::cartridge::Cartridge, nes::ppu::Ppu};
+use crate::{
+    bus::{Bus, TickResult},
+    nes::cartridge::Cartridge,
+    nes::ppu::Ppu,
+};
 
 pub struct NesBus {
     ram: [u8; 2048],       // 2KB internal RAM
     prg_ram: [u8; 0x2000], // 8KB PRG RAM ($6000-$7FFF)
     cartridge: Cartridge,
-    pub ppu: Ppu,          // PPU instance
-    dma_cycles: u32,       // DMA pending cycles (0 = no DMA)
+    pub ppu: Ppu,    // PPU instance
+    dma_cycles: u32, // DMA pending cycles (0 = no DMA)
 }
 
 impl NesBus {
@@ -38,7 +42,9 @@ impl NesBus {
 
     /// Advance PPU by one CPU cycle (placeholder for rendering)
     pub fn tick_ppu(&mut self) {
-        // TODO: PPU rendering cycle advance
+        self.ppu.tick();
+        self.ppu.tick();
+        self.ppu.tick();
     }
 }
 

@@ -28,26 +28,30 @@ const STATUS_VBLANK: u8 = 0x80; // bit 7: vblank
 
 pub struct Ppu {
     // CPU-facing registers
-    ctrl: u8,      // $2000 PPUCTRL (write only)
-    mask: u8,      // $2001 PPUMASK (write only)
-    status: u8,    // $2002 PPUSTATUS (read only)
-    pub oam_addr: u8,  // $2003 OAMADDR (write only)
+    ctrl: u8,         // $2000 PPUCTRL (write only)
+    mask: u8,         // $2001 PPUMASK (write only)
+    status: u8,       // $2002 PPUSTATUS (read only)
+    pub oam_addr: u8, // $2003 OAMADDR (write only)
 
     // Loopy registers (internal VRAM address system)
     // v: current VRAM address (15-bit, used for reads/writes)
     // t: temporary VRAM address (15-bit, used for scroll/addr setup)
     // x: fine X scroll (3-bit)
     // w: write toggle (1-bit, alternates between first/second write)
-    v: u16,        // current VRAM address
-    t: u16,        // temporary VRAM address
-    x: u8,         // fine X scroll (0-7)
-    w: bool,       // write toggle
+    v: u16,  // current VRAM address
+    t: u16,  // temporary VRAM address
+    x: u8,   // fine X scroll (0-7)
+    w: bool, // write toggle
+
+    scanline: u16, // scanline index
+    dot: u16,      // point
+    frame: u64,    // frame counter
 
     // PPUDATA read buffer (NES PPU reads ahead one byte)
     read_buffer: u8,
 
     // Internal memory
-    chr_rom: Vec<u8>,   // Pattern tables from cartridge CHR ROM
+    chr_rom: Vec<u8>,  // Pattern tables from cartridge CHR ROM
     vram: [u8; 2048],  // 2KB VRAM (nametables $2000-$2FFF)
     palette: [u8; 32], // Palette RAM ($3F00-$3F1F)
     oam: [u8; 256],    // OAM (Object Attribute Memory)
@@ -68,11 +72,33 @@ impl Ppu {
             x: 0,
             w: false,
             read_buffer: 0,
+            scanline: 0,
+            dot: 0,
+            frame: 0,
             chr_rom,
             vram: [0; 2048],
             palette: [0; 32],
             oam: [0; 256],
             nmi_pending: false,
+        }
+    }
+
+    pub fn tick(&mut self) {
+        self.dot += 1;
+
+        if self.dot > 340 {
+            self.dot = 0;
+            self.scanline += 1;
+
+            if self.scanline == 241 {
+                self.set_vblank();
+            }
+
+            if self.scanline == 262 {
+                self.scanline = 0;
+                self.frame += 1;
+                self.clear_vblank();
+            }
         }
     }
 
@@ -164,7 +190,7 @@ impl Ppu {
                     // Second write: Y scroll
                     self.t = (self.t & 0x0C1F)
                         | ((val as u16 & 0x07) << 12)      // fine Y -> bits 12-14
-                        | ((val as u16 & 0xF8) << 2);      // coarse Y -> bits 5-9
+                        | ((val as u16 & 0xF8) << 2); // coarse Y -> bits 5-9
                     self.w = false;
                 }
             }
@@ -284,7 +310,11 @@ impl Ppu {
 
     /// Auto-increment VRAM address by 1 or 32 (based on PPUCTRL bit 2)
     fn increment_vram_addr(&mut self) {
-        let increment = if (self.ctrl & CTRL_VRAM_INCR) != 0 { 32 } else { 1 };
+        let increment = if (self.ctrl & CTRL_VRAM_INCR) != 0 {
+            32
+        } else {
+            1
+        };
         self.v = self.v.wrapping_add(increment);
     }
 
