@@ -18,21 +18,6 @@ pub enum Mode {
     Relative,
 }
 
-pub fn operand_bytes(mode: Mode) -> u8 {
-    match mode {
-        Mode::Implied | Mode::Accumulator => 0,
-        Mode::Relative
-        | Mode::Immediate
-        | Mode::ZeroPage
-        | Mode::ZeroPageX
-        | Mode::ZeroPageY
-        | Mode::ZpIndirect
-        | Mode::ZpIndirectX
-        | Mode::ZpIndirectY => 1,
-        Mode::Absolute | Mode::AbsoluteX | Mode::AbsoluteY | Mode::Indirect => 2,
-    }
-}
-
 pub fn lookup(opcode: u8) -> Option<(&'static str, Mode, u8)> {
     match opcode {
         // NOP

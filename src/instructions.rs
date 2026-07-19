@@ -244,7 +244,6 @@ impl<B: Bus> Cpu<B> {
             opcodes::ADC_ABS => { let a = self.absolute(); let v = self.read(a); self.adc(v); 4 }
             opcodes::ADC_ABSX => { let (b, a) = self.absolute_x(); let v = self.read(a); self.adc(v); 4 + self.crossed_page(b, a) as u8 }
             opcodes::ADC_ABSY => { let (b, a) = self.absolute_y(); let v = self.read(a); self.adc(v); 4 + self.crossed_page(b, a) as u8 }
-            opcodes::ADC_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.adc(v); 5 }
             opcodes::ADC_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.adc(v); 6 }
             opcodes::ADC_AIY => { let (b, a) = self.post_indexed_y(); let v = self.read(a); self.adc(v); 5 + self.crossed_page(b, a) as u8 }
 
@@ -254,20 +253,15 @@ impl<B: Bus> Cpu<B> {
             opcodes::SBC_ABS => { let a = self.absolute(); let v = self.read(a); self.sbc(v); 4 }
             opcodes::SBC_ABSX => { let (b, a) = self.absolute_x(); let v = self.read(a); self.sbc(v); 4 + self.crossed_page(b, a) as u8 }
             opcodes::SBC_ABSY => { let (b, a) = self.absolute_y(); let v = self.read(a); self.sbc(v); 4 + self.crossed_page(b, a) as u8 }
-            opcodes::SBC_ZPI => { let a = self.pre_indexed_y(); let v = self.read(a); self.sbc(v); 5 }
             opcodes::SBC_ZPXI => { let a = self.pre_indexed_x(); let v = self.read(a); self.sbc(v); 6 }
             opcodes::SBC_AIY => { let (b, a) = self.post_indexed_y(); let v = self.read(a); self.sbc(v); 5 + self.crossed_page(b, a) as u8 }
 
             // ==================== NMOS 6502 Illegal Opcodes ====================
             // DOP (Double NOP): various addressing modes, read operand but do nothing
-            0x04 | 0x44 | 0x64 => { self.zeropage(); 3 },
-            0x0C | 0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => { self.absolute(); 4 },
-            0x14 | 0x34 | 0x54 | 0xD4 | 0xF4 => { self.zeropage_x(); 4 },
-            0x80 => { self.branch(true) }, // BRA on NMOS is BPL with bit 7 set (always taken)
+            0x44 => { self.zeropage(); 3 },
+            0x5C | 0xDC | 0xFC => { self.absolute(); 4 },
+            0x54 | 0xD4 | 0xF4 => { self.zeropage_x(); 4 },
             0x82 | 0xC2 | 0xE2 => { self.pc = self.pc.wrapping_add(1); 2 },
-            0x89 => { self.pc = self.pc.wrapping_add(1); 2 }, // BIT # as NOP
-            0x1A | 0x3A => 2, // NOP (INC A / DEC A on CMOS)
-            0x5A | 0x7A | 0xDA | 0xFA => 2, // NOP (PHY/PLY/PHX/PLX on CMOS)
             // WAI: 2-byte NOP on NMOS
             0xCB => {
                 let addr = self.immediate();
@@ -371,7 +365,7 @@ impl<B: Bus> Cpu<B> {
             }
 
             // JAM: CPU lockup - PC does NOT advance
-            0x02 | 0x12 | 0x22 | 0x32 | 0x42 | 0x52 | 0x62 | 0x72 | 0x92 | 0xB2 | 0xD2 | 0xF2 => {
+            0x02 | 0x22 | 0x42 | 0x62 => {
                 self.pc = self.pc.wrapping_sub(1);
                 2
             }
@@ -464,11 +458,6 @@ impl<B: Bus> Cpu<B> {
     // Store Y to Memory
     fn sty(&mut self, addr: u16) {
         self.write(addr, self.y);
-    }
-
-    // Store Zero to Memory (CMOS)
-    fn stz(&mut self, addr: u16) {
-        self.write(addr, 0);
     }
 
     // Increment Memory

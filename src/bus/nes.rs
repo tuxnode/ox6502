@@ -71,9 +71,6 @@ impl Bus for NesBus {
             // Other APU and I/O registers
             0x4000..=0x4015 | 0x4018..=0x401F => 0,
 
-            // APU test mode (normally disabled)
-            0x4018..=0x401F => 0,
-
             // Cartridge PRG RAM ($6000-$7FFF)
             0x6000..=0x7FFF => self.prg_ram[(addr - 0x6000) as usize],
 

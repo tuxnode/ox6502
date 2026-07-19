@@ -66,22 +66,6 @@ impl<B: Bus> Cpu<B> {
         (hi << 8) | lo
     }
 
-    pub(crate) fn pre_indexed_y(&mut self) -> u16 {
-        let zp = self.fetch();
-        let indexed = zp.wrapping_add(self.y);
-        let lo = self.read(indexed as u16) as u16;
-        let hi = self.read(indexed.wrapping_add(1) as u16) as u16;
-        (hi << 8) | lo
-    }
-
-    // Post-Indexed Indirect, "(Zero-Page),X,Y" — returns (base_addr, effective_addr)
-    pub(crate) fn post_indexed_x(&mut self) -> u16 {
-        let zp = self.fetch();
-        let lo = self.read(zp as u16) as u16;
-        let hi = self.read(zp.wrapping_add(1) as u16) as u16;
-        ((hi << 8) | lo).wrapping_add(self.x as u16)
-    }
-
     pub(crate) fn post_indexed_y(&mut self) -> (u16, u16) {
         let zp = self.fetch();
         let lo = self.read(zp as u16) as u16;
@@ -91,11 +75,4 @@ impl<B: Bus> Cpu<B> {
         (base, addr)
     }
 
-    // Relative Addressing (Conditional Branching) — returns (old_pc, target_pc)
-    pub(crate) fn relative(&mut self) -> (u16, u16) {
-        let old_pc = self.pc;
-        let offset = self.fetch() as i8;
-        let target = self.pc.wrapping_add(offset as u16);
-        (old_pc, target)
-    }
 }

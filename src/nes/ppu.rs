@@ -11,16 +11,11 @@ use crate::nes::palette;
 
 // PPUCTRL ($2000) bits
 const CTRL_NMI_ENABLE: u8 = 0x80; // bit 7: NMI enable
-const CTRL_MASTER_SLAVE: u8 = 0x40; // bit 6: PPU master/slave
-const CTRL_SPR_SIZE: u8 = 0x20; // bit 5: sprite size (0: 8x8, 1: 8x16)
 const CTRL_BG_ADDR: u8 = 0x10; // bit 4: background pattern table (0: $0000, 1: $1000)
 const CTRL_SPR_ADDR: u8 = 0x08; // bit 3: sprite pattern table (0: $0000, 1: $1000)
 const CTRL_VRAM_INCR: u8 = 0x04; // bit 2: VRAM address increment (0: +1 across, 1: +32 down)
 
 // PPUMASK ($2001) bits
-const MASK_GREYSCALE: u8 = 0x01; // bit 0: greyscale
-const MASK_SHOW_BG_LEFT: u8 = 0x02; // bit 1: show background in leftmost 8px
-const MASK_SHOW_SPR_LEFT: u8 = 0x04; // bit 2: show sprites in leftmost 8px
 const MASK_SHOW_BG: u8 = 0x08; // bit 3: show background
 const MASK_SHOW_SPR: u8 = 0x10; // bit 4: show sprites
 
@@ -353,7 +348,7 @@ impl Ppu {
     pub fn dma_write_oam(&mut self, page_data: &[u8; 256]) {
         let base = self.oam_addr as usize;
         for i in 0..256u16 {
-            self.oam[((base + i as usize) & 0xFF)] = page_data[i as usize];
+            self.oam[(base + i as usize) & 0xFF] = page_data[i as usize];
         }
     }
 
