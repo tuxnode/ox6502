@@ -40,11 +40,11 @@ impl NesBus {
         self.ppu.take_nmi()
     }
 
-    /// Advance PPU by one CPU cycle (placeholder for rendering)
-    pub fn tick_ppu(&mut self) {
-        self.ppu.tick();
-        self.ppu.tick();
-        self.ppu.tick();
+    /// Advance PPU by the given number of CPU cycles (1 CPU cycle = 3 PPU dots)
+    pub fn tick_ppu(&mut self, cpu_cycles: u8) {
+        for _ in 0..(cpu_cycles * 3) {
+            self.ppu.tick();
+        }
     }
 }
 
@@ -128,12 +128,13 @@ impl Bus for NesBus {
         self.ppu.ppu_write(addr, val);
     }
 
-    fn tick(&mut self) -> TickResult {
-        let extra = self.take_dma_cycles();
+    fn tick(&mut self, cpu_cycles: u8) -> TickResult {
+        // Advance PPU first (may set nmi_pending when entering VBlank)
+        self.tick_ppu(cpu_cycles);
+        // Then check for NMI
         let nmi = self.check_nmi();
-        self.tick_ppu();
         TickResult {
-            extra_cycles: extra,
+            extra_cycles: self.take_dma_cycles(),
             nmi,
         }
     }

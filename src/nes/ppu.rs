@@ -1,3 +1,5 @@
+use crate::nes::palette;
+
 /**
  * PPU (Picture Processing Unit) — minimal register-level definition
  * NES Dev Wiki: https://www.nesdev.org/wiki/PPU
@@ -26,6 +28,9 @@ const STATUS_OVERFLOW: u8 = 0x20; // bit 5: sprite overflow
 const STATUS_SPR0_HIT: u8 = 0x40; // bit 6: sprite 0 hit
 const STATUS_VBLANK: u8 = 0x80; // bit 7: vblank
 
+const FB_WIDTH: usize = 256;
+const FB_HEIGHT: usize = 240;
+
 pub struct Ppu {
     // CPU-facing registers
     ctrl: u8,         // $2000 PPUCTRL (write only)
@@ -50,6 +55,9 @@ pub struct Ppu {
     // PPUDATA read buffer (NES PPU reads ahead one byte)
     read_buffer: u8,
 
+    // FRAME_BUFFER
+    frame_buffer: [u8; FB_WIDTH * FB_HEIGHT * 3],
+
     // Internal memory
     chr_rom: Vec<u8>,  // Pattern tables from cartridge CHR ROM
     vram: [u8; 2048],  // 2KB VRAM (nametables $2000-$2FFF)
@@ -72,6 +80,7 @@ impl Ppu {
             x: 0,
             w: false,
             read_buffer: 0,
+            frame_buffer: [0; FB_WIDTH * FB_HEIGHT * 3],
             scanline: 0,
             dot: 0,
             frame: 0,
@@ -91,6 +100,10 @@ impl Ppu {
             self.scanline += 1;
 
             if self.scanline == 241 {
+                if self.rendering_enabled() {
+                    self.render_background();
+                    self.render_sprites();
+                }
                 self.set_vblank();
             }
 
@@ -332,6 +345,144 @@ impl Ppu {
         (self.mask & MASK_SHOW_BG) != 0 || (self.mask & MASK_SHOW_SPR) != 0
     }
 
+    pub fn render_background(&mut self) {
+        let bank: u16 = if (self.ctrl & CTRL_BG_ADDR) != 0 {
+            0x1000
+        } else {
+            0x0000
+        };
+
+        for tile_row in 0..30 {
+            for tile_col in 0..32 {
+                let tile_index = self.vram[(tile_row * 32 + tile_col) as usize] as u16;
+
+                let attr_idx = (tile_row / 4) * 8 + (tile_col / 4);
+                let attr_byte = self.vram[0x3C0 + attr_idx as usize];
+                let palette_shift = ((tile_col % 4) / 2) * 2 + ((tile_row % 4) / 2) * 4;
+                let palette_idx = (attr_byte >> palette_shift) & 0x03;
+
+                let tile_addr = (bank + tile_index * 16) as usize;
+                for y in 0..8 {
+                    let lo_byte = self.chr_rom[tile_addr + y];
+                    let hi_byte = self.chr_rom[tile_addr + 8 + y];
+
+                    for x in 0..8 {
+                        let bit = 7 - x;
+                        let lo = (lo_byte >> bit) & 1;
+                        let hi = (hi_byte >> bit) & 1;
+                        let color_idx = (hi << 1) | lo;
+
+                        // Check Color
+                        let palette_entry = if color_idx == 0 {
+                            self.palette[0]
+                        } else {
+                            self.palette[(palette_idx as usize) * 4 + color_idx as usize]
+                        };
+
+                        let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+                        let px = (tile_col * 8 + x) as usize;
+                        let py = (tile_row * 8 + y) as usize;
+                        let offset = (py * 256 + px) * 3;
+                        self.frame_buffer[offset] = r;
+                        self.frame_buffer[offset + 1] = g;
+                        self.frame_buffer[offset + 2] = b;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn render_sprites(&mut self) {
+        if (self.mask & MASK_SHOW_SPR) == 0 {
+            return;
+        }
+
+        let bank: u16 = if (self.ctrl & CTRL_SPR_ADDR) != 0 {
+            0x1000
+        } else {
+            0x0000
+        };
+
+        // Iterate in reverse so sprite 0 (highest priority) draws last
+        for i in (0..self.oam.len()).step_by(4).rev() {
+            let y = self.oam[i] as i16;
+            let tile_index = self.oam[i + 1] as u16;
+            let attr = self.oam[i + 2];
+            let x = self.oam[i + 3] as i16;
+
+            // Check visibility: 0 or >= 240 means off-screen (Y-1 is actual top)
+            if y >= 239 || y < 0 {
+                continue;
+            }
+
+            let flip_h = (attr & 0x40) != 0;
+            let flip_v = (attr & 0x80) != 0;
+            let palette_idx = (attr & 0x03) as usize;
+            let priority_behind = (attr & 0x20) != 0;
+
+            let tile_addr = (bank + tile_index * 16) as usize;
+
+            for ty in 0..8 {
+                let sy = if flip_v { 7 - ty } else { ty };
+                let lo_byte = self.chr_rom[tile_addr + sy];
+                let hi_byte = self.chr_rom[tile_addr + 8 + sy];
+
+                for tx in 0..8 {
+                    let sx = if flip_h { 7 - tx } else { tx };
+                    let bit = 7 - sx;
+                    let lo = (lo_byte >> bit) & 1;
+                    let hi = (hi_byte >> bit) & 1;
+                    let color_idx = (hi << 1) | lo;
+
+                    if color_idx == 0 {
+                        continue; // transparent
+                    }
+
+                    let px = (x + tx as i16) as usize;
+                    let py = (y as i16 + ty as i16) as usize;
+
+                    if px >= 256 || py >= 240 {
+                        continue;
+                    }
+
+                    if priority_behind {
+                        // Check if background pixel is non-zero at this position
+                        let bg_offset = (py * 256 + px) * 3;
+                        if bg_offset + 2 < self.frame_buffer.len()
+                            && (self.frame_buffer[bg_offset] != 0
+                                || self.frame_buffer[bg_offset + 1] != 0
+                                || self.frame_buffer[bg_offset + 2] != 0)
+                        {
+                            continue; // sprite behind background
+                        }
+                    }
+
+                    let palette_entry = self.palette[0x11 + palette_idx * 4 + (color_idx - 1) as usize];
+                    let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+                    let offset = (py * 256 + px) * 3;
+                    self.frame_buffer[offset] = r;
+                    self.frame_buffer[offset + 1] = g;
+                    self.frame_buffer[offset + 2] = b;
+                }
+            }
+        }
+    }
+
+    /// Get current scanline
+    pub fn scanline(&self) -> u16 {
+        self.scanline
+    }
+
+    /// Get current dot
+    pub fn dot(&self) -> u16 {
+        self.dot
+    }
+
+    /// Get completed frame count
+    pub fn frame(&self) -> u64 {
+        self.frame
+    }
+
     /// Get current VRAM address (for rendering)
     pub fn vram_addr(&self) -> u16 {
         self.v
@@ -347,8 +498,23 @@ impl Ppu {
         self.ctrl
     }
 
+    /// Get PPUMASK value
+    pub fn mask(&self) -> u8 {
+        self.mask
+    }
+
+    /// Get PPUSTATUS value
+    pub fn status(&self) -> u8 {
+        self.status
+    }
+
     /// Copy t to v (used at end of vblank / start of rendering)
     pub fn copy_t_to_v(&mut self) {
         self.v = self.t;
+    }
+
+    /// Get the frame buffer slice (RGB bytes, 256x240)
+    pub fn frame_buffer(&self) -> &[u8] {
+        &self.frame_buffer
     }
 }

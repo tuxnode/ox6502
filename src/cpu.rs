@@ -20,6 +20,16 @@ pub struct Cpu<B: Bus> {
 }
 
 impl<B: Bus> Cpu<B> {
+    pub fn bus(&self) -> &B {
+        &self.bus
+    }
+
+    pub fn bus_mut(&mut self) -> &mut B {
+        &mut self.bus
+    }
+}
+
+impl<B: Bus> Cpu<B> {
     pub fn new(bus: B) -> Self {
         let mut cpu = Self {
             a: 0,
@@ -107,15 +117,15 @@ impl<B: Bus> Cpu<B> {
     /// NES-specific run loop with DMA and NMI support
     pub fn run_nes(&mut self) {
         loop {
-            let step_cycles = self.step() as u64;
-            self.cycles += step_cycles;
+            let step_cycles = self.step();
+            self.cycles += step_cycles as u64;
 
             // Tick bus: get DMA cycles and check NMI
-            let tick = self.bus.tick();
+            let tick = self.bus.tick(step_cycles);
             self.cycles += tick.extra_cycles as u64;
 
-            // Handle NMI (cannot be interrupted if I flag is set)
-            if tick.nmi && !self.get_flag(FLAG_I) {
+            // NMI is non-maskable — I flag does not block it
+            if tick.nmi {
                 self.handle_nmi();
             }
         }

@@ -100,14 +100,14 @@
 - [ ] SBC #（0xEB）— 替代编码，需要验证标志位
 
 ### PPU 渲染
-- [ ] 扫描线渲染循环（262 扫描线/帧）
-- [ ] 背景渲染（nametable fetch → attribute table → pattern table → shift register）
-- [ ] 精灵渲染（OAM 评估 → pattern fetch → priority）
+- [X] 扫描线渲染循环（262 扫描线/帧）
+- [X] 背景渲染（nametable fetch → attribute table → pattern table → shift register）
+- [X] 精灵渲染（OAM 评估 → pattern fetch → priority）
 - [ ] Sprite 0 Hit 检测
 - [ ] 精灵溢出检测
 - [ ] 滚动实现（coarse/fine X/Y + nametable 切换）
-- [ ] 帧缓冲输出（RGB 像素数组）
-- [ ] NMI 时序（scanline 241 触发，scanline 261 清除）
+- [X] 帧缓冲输出（RGB 像素数组）
+- [X] NMI 时序（scanline 241 触发，scanline 261 清除）
 
 ### Mapper
 - [ ] Mapper trait 定义（cpu_read/write, ppu_read/write, mirroring, irq）
