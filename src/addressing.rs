@@ -3,6 +3,11 @@
 use crate::{bus::Bus, cpu::Cpu};
 
 impl<B: Bus> Cpu<B> {
+    /// Check whether an indexed effective address crosses a page boundary.
+    pub(crate) fn crossed_page(&self, base: u16, effective: u16) -> bool {
+        (base & 0xFF00) != (effective & 0xFF00)
+    }
+
     // Immediately Addressing
     pub(crate) fn immediate(&mut self) -> u16 {
         let addr = self.pc;
@@ -20,7 +25,7 @@ impl<B: Bus> Cpu<B> {
         self.fetch() as u16
     }
 
-    // Zero Page Indexing X, Y: Read 8 bits Address then add X register's vaule
+    // Zero Page Indexing X, Y: Read 8 bits Address then add X register's value
     pub(crate) fn zeropage_x(&mut self) -> u16 {
         (self.fetch().wrapping_add(self.x)) as u16
     }
@@ -29,13 +34,17 @@ impl<B: Bus> Cpu<B> {
         (self.fetch().wrapping_add(self.y)) as u16
     }
 
-    // Absolute Addressing X, Y
-    pub(crate) fn absolute_x(&mut self) -> u16 {
-        self.fetch_u16().wrapping_add(self.x as u16)
+    // Absolute Addressing X, Y — returns (base_addr, effective_addr)
+    pub(crate) fn absolute_x(&mut self) -> (u16, u16) {
+        let base = self.fetch_u16();
+        let addr = base.wrapping_add(self.x as u16);
+        (base, addr)
     }
 
-    pub(crate) fn absolute_y(&mut self) -> u16 {
-        self.fetch_u16().wrapping_add(self.y as u16)
+    pub(crate) fn absolute_y(&mut self) -> (u16, u16) {
+        let base = self.fetch_u16();
+        let addr = base.wrapping_add(self.y as u16);
+        (base, addr)
     }
 
     // Indirect Addressing (NMOS 6502 page boundary bug)
@@ -65,7 +74,7 @@ impl<B: Bus> Cpu<B> {
         (hi << 8) | lo
     }
 
-    // Post-Indexed Indirect, "(Zero-Page),X,Y"
+    // Post-Indexed Indirect, "(Zero-Page),X,Y" — returns (base_addr, effective_addr)
     pub(crate) fn post_indexed_x(&mut self) -> u16 {
         let zp = self.fetch();
         let lo = self.read(zp as u16) as u16;
@@ -73,16 +82,20 @@ impl<B: Bus> Cpu<B> {
         ((hi << 8) | lo).wrapping_add(self.x as u16)
     }
 
-    pub(crate) fn post_indexed_y(&mut self) -> u16 {
+    pub(crate) fn post_indexed_y(&mut self) -> (u16, u16) {
         let zp = self.fetch();
         let lo = self.read(zp as u16) as u16;
         let hi = self.read(zp.wrapping_add(1) as u16) as u16;
-        ((hi << 8) | lo).wrapping_add(self.y as u16)
+        let base = (hi << 8) | lo;
+        let addr = base.wrapping_add(self.y as u16);
+        (base, addr)
     }
 
-    // Relative Addressing (Conditional Branching)
-    pub(crate) fn relative(&mut self) -> u16 {
+    // Relative Addressing (Conditional Branching) — returns (old_pc, target_pc)
+    pub(crate) fn relative(&mut self) -> (u16, u16) {
+        let old_pc = self.pc;
         let offset = self.fetch() as i8;
-        self.pc.wrapping_add(offset as u16)
+        let target = self.pc.wrapping_add(offset as u16);
+        (old_pc, target)
     }
 }
