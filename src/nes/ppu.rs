@@ -369,13 +369,49 @@ impl Ppu {
             0x0000
         };
 
-        for tile_row in 0..30 {
-            for tile_col in 0..32 {
-                let tile_index = self.vram[(tile_row * 32 + tile_col) as usize] as u16;
+        // Extract scroll from loopy registers
+        let scroll_x = ((self.t & 0x001F) << 3) | (self.x as u16);
+        let coarse_y = (self.t >> 5) & 0x001F;
+        let fine_y = (self.t >> 12) & 0x0007;
+        let scroll_y = (coarse_y << 3) | fine_y;
 
-                let attr_idx = (tile_row / 4) * 8 + (tile_col / 4);
-                let attr_byte = self.vram[0x3C0 + attr_idx as usize];
-                let palette_shift = ((tile_col % 4) / 2) * 2 + ((tile_row % 4) / 2) * 4;
+        // Render 33 columns to cover fine_x scroll offset
+        for tile_row in 0..30 {
+            for tile_col in 0..33 {
+                let screen_px = tile_col * 8;
+                let screen_py = tile_row * 8;
+
+                // World-space pixel position of this tile's top-left
+                let world_px = (scroll_x as usize).wrapping_add(screen_px);
+                let world_py = (scroll_y as usize).wrapping_add(screen_py);
+
+                // Determine which nametable in the 2x2 grid
+                let grid_x = world_px / 256;
+                let grid_y = world_py / 240;
+
+                // Local tile coordinates within a nametable
+                let local_tile_x = (world_px / 8) % 32;
+                let local_tile_y = (world_py / 8) % 30;
+
+                // Map grid position to nametable index (0-3)
+                let abs_nt = (grid_x & 1) | ((grid_y & 1) << 1);
+                let ppu_addr = (0x2000 + abs_nt * 0x400
+                    + local_tile_y * 32 + local_tile_x) as u16;
+
+                // Get VRAM index via current mirroring
+                let vram_idx = self.mirror_nt_addr(ppu_addr);
+
+                let tile_index = self.vram[vram_idx] as u16;
+
+                // Attribute byte: same nametable base, offset 0x3C0
+                let nt_base_addr = ppu_addr & !0x03FF;
+                let attr_offset = (local_tile_y / 4) * 8 + (local_tile_x / 4);
+                let attr_ppu = nt_base_addr + 0x3C0 + attr_offset as u16;
+                let attr_vram = self.mirror_nt_addr(attr_ppu);
+                let attr_byte = self.vram[attr_vram];
+
+                let palette_shift = ((local_tile_x % 4) / 2) * 2
+                    + ((local_tile_y % 4) / 2) * 4;
                 let palette_idx = (attr_byte >> palette_shift) & 0x03;
 
                 let tile_addr = (bank + tile_index * 16) as usize;
@@ -389,7 +425,6 @@ impl Ppu {
                         let hi = (hi_byte >> bit) & 1;
                         let color_idx = (hi << 1) | lo;
 
-                        // Check Color
                         let palette_entry = if color_idx == 0 {
                             self.palette[0]
                         } else {
@@ -397,12 +432,18 @@ impl Ppu {
                         };
 
                         let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
-                        let px = (tile_col * 8 + x) as usize;
-                        let py = (tile_row * 8 + y) as usize;
-                        let offset = (py * 256 + px) * 3;
-                        self.frame_buffer[offset] = r;
-                        self.frame_buffer[offset + 1] = g;
-                        self.frame_buffer[offset + 2] = b;
+
+                        // Screen pixel position (with fine_x scroll subtracted)
+                        let px = screen_px + x;
+                        let py = screen_py + y;
+
+                        // Clip to visible region
+                        if px < 256 && py < 240 {
+                            let offset = (py * 256 + px) * 3;
+                            self.frame_buffer[offset] = r;
+                            self.frame_buffer[offset + 1] = g;
+                            self.frame_buffer[offset + 2] = b;
+                        }
                     }
                 }
             }
