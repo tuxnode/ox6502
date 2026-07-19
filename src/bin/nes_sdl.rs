@@ -79,9 +79,15 @@ fn main() {
             }
         }
 
-        // Run CPU until NMI fires (one frame)
+        // Run CPU until NMI fires (one frame), with safety limit
         let mut frame_done = false;
+        let frame_start_cycles = cpu.cycles;
         while !frame_done {
+            // Safety: if no NMI after 1M cycles, break to prevent freeze
+            if cpu.cycles - frame_start_cycles > 1_000_000 {
+                eprintln!("[nes_sdl] NMI timeout at cycle {} pc=${:04X}", cpu.cycles, cpu.pc);
+                break;
+            }
             let step_cycles = cpu.step();
             cpu.cycles += step_cycles as u64;
 

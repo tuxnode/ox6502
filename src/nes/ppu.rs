@@ -110,12 +110,24 @@ impl Ppu {
                     self.render_sprites();
                 }
                 self.set_vblank();
+                self.set_vblank();
+            }
+
+            if self.scanline == 261 && self.dot == 0 {
+                self.status &= !STATUS_SPR0_HIT;
             }
 
             if self.scanline == 262 {
                 self.scanline = 0;
                 self.frame += 1;
                 self.clear_vblank();
+            }
+
+            // Set Sprite 0 Hit at start of visible scanlines for game polling
+            if self.scanline == 0 && self.dot == 0 {
+                if self.rendering_enabled() && self.oam[0] < 239 {
+                    self.status |= STATUS_SPR0_HIT;
+                }
             }
         }
     }
@@ -251,8 +263,8 @@ impl Ppu {
     /// 清除 vblank 标志（每帧开始时调用）
     pub fn clear_vblank(&mut self) {
         self.status &= !STATUS_VBLANK;
-        self.status &= !STATUS_OVERFLOW;
-        self.status &= !STATUS_SPR0_HIT;
+        // Sprite 0 Hit is cleared at rendering time (render_sprites)
+        // so it persists across frames for game polling loops
     }
 
     /// 读取并清除 NMI pending 状态（CPU 每周期检查）
@@ -400,7 +412,9 @@ impl Ppu {
 
                 // Get VRAM index via current mirroring
                 let vram_idx = self.mirror_nt_addr(ppu_addr);
-
+                if vram_idx >= self.vram.len() {
+                    continue;
+                }
                 let tile_index = self.vram[vram_idx] as u16;
 
                 // Attribute byte: same nametable base, offset 0x3C0
@@ -408,6 +422,9 @@ impl Ppu {
                 let attr_offset = (local_tile_y / 4) * 8 + (local_tile_x / 4);
                 let attr_ppu = nt_base_addr + 0x3C0 + attr_offset as u16;
                 let attr_vram = self.mirror_nt_addr(attr_ppu);
+                if attr_vram >= self.vram.len() {
+                    continue;
+                }
                 let attr_byte = self.vram[attr_vram];
 
                 let palette_shift = ((local_tile_x % 4) / 2) * 2
@@ -415,6 +432,9 @@ impl Ppu {
                 let palette_idx = (attr_byte >> palette_shift) & 0x03;
 
                 let tile_addr = (bank + tile_index * 16) as usize;
+                if tile_addr + 15 >= self.chr_rom.len() {
+                    continue;
+                }
                 for y in 0..8 {
                     let lo_byte = self.chr_rom[tile_addr + y];
                     let hi_byte = self.chr_rom[tile_addr + 8 + y];
@@ -460,6 +480,8 @@ impl Ppu {
         } else {
             0x0000
         };
+
+        let mut sprite_0_hit = false;
 
         // Iterate in reverse so sprite 0 (highest priority) draws last
         for i in (0..self.oam.len()).step_by(4).rev() {
@@ -515,6 +537,17 @@ impl Ppu {
                         }
                     }
 
+                    // Sprite 0 Hit detection
+                    if i == 0 && (self.mask & MASK_SHOW_BG) != 0 {
+                        let bg_off = (py * 256 + px) * 3;
+                        if self.frame_buffer[bg_off] != 0
+                            || self.frame_buffer[bg_off + 1] != 0
+                            || self.frame_buffer[bg_off + 2] != 0
+                        {
+                            sprite_0_hit = true;
+                        }
+                    }
+
                     let palette_entry = self.palette[0x11 + palette_idx * 4 + (color_idx - 1) as usize];
                     let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
                     let offset = (py * 256 + px) * 3;
@@ -524,6 +557,7 @@ impl Ppu {
                 }
             }
         }
+
     }
 
     /// Get current scanline
