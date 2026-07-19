@@ -91,15 +91,39 @@ cargo run -- tests/roms/6502_functional_test.bin --debug
 
 Press Enter to repeat the last command.
 
-## NES Rendering
+## Usage
 
+### CPU Test ROMs
 ```bash
-# Real-time display (requires SDL2)
+# Run Klaus Dormann 6502 functional test
+cargo run -- tests/roms/6502_functional_test.bin
+
+# Run 65C02 extended opcode test
+cargo run -- tests/roms/65C02_extended_opcodes_test.bin
+
+# Interactive debugger monitor
+cargo run -- tests/roms/6502_functional_test.bin --debug
+```
+
+### NES Games
+```bash
+# Real-time display with keyboard input (requires SDL2)
 cargo run --bin nes_sdl -- <game.nes>
 
-# Offline frame capture (no SDL2 needed)
+# Offline frame capture to PPM file (no SDL2 needed)
 cargo run --bin nes_render -- <game.nes> [frames]
 ```
+
+### Keyboard Controls (nes_sdl)
+
+| Key | NES Button |
+|-----|------------|
+| A | A |
+| S | B |
+| Backspace | Select |
+| Enter | Start |
+| ↑ ↓ ← → | D-Pad |
+| Esc | Quit |
 
 ## PPU Memory Map
 
