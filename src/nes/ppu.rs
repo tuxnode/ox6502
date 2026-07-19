@@ -123,8 +123,10 @@ impl Ppu {
                 self.clear_vblank();
             }
 
-            // Set Sprite 0 Hit at start of visible scanlines for game polling
-            if self.scanline == 0 && self.dot == 0 {
+            // Set Sprite 0 Hit near end of visible scanlines for game polling
+            // Scanline 200 is late enough that most of the frame renders with
+            // the initial scroll value, minimizing visual artifacts
+            if self.scanline == 200 && self.dot == 0 {
                 if self.rendering_enabled() && self.oam[0] < 239 {
                     self.status |= STATUS_SPR0_HIT;
                 }
