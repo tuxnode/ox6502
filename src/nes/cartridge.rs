@@ -40,9 +40,9 @@ Flags_6 Reference:
 +++++++-- Reserved, set to zero
 */
 
-/**
-* Flag_10:
-76543210
+/*
+ * Flag_10:
+ * 76543210
   ||  ||
   ||  ++- TV system (0: NTSC; 2: PAL; 1/3: dual compatible)
   |+----- PRG RAM ($6000-$7FFF) (0: present; 1: not present)

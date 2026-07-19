@@ -4,6 +4,12 @@ pub struct SimpleBus {
     memory: [u8; 0x10000],
 }
 
+impl Default for SimpleBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SimpleBus {
     pub fn new() -> Self {
         Self {

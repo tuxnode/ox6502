@@ -12,18 +12,10 @@ pub trait Bus {
     }
 }
 
+#[derive(Default)]
 pub struct TickResult {
     pub extra_cycles: u32,
     pub nmi: bool,
-}
-
-impl Default for TickResult {
-    fn default() -> Self {
-        Self {
-            extra_cycles: 0,
-            nmi: false,
-        }
-    }
 }
 
 pub mod nes;

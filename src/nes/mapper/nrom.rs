@@ -36,12 +36,8 @@ impl Mapper for Nrom {
     fn ppu_read(&mut self, addr: u16) -> u8 {
         match addr {
             // Pattern tables: $0000-$1FFF from CHR ROM
-            0x0000..=0x1FFF => {
-                if (addr as usize) < self.chr_rom.len() {
-                    self.chr_rom[addr as usize]
-                } else {
-                    0
-                }
+            0x0000..=0x1FFF if (addr as usize) < self.chr_rom.len() => {
+                self.chr_rom[addr as usize]
             }
             _ => 0,
         }

@@ -49,7 +49,7 @@ fn main() {
     let fb = cpu.bus().ppu.frame_buffer();
     let ppm_path = "frame.ppm";
     let mut f = fs::File::create(ppm_path).expect("Failed to create PPM file");
-    f.write_all(format!("P6\n256 240\n255\n").as_bytes())
+    f.write_all(b"P6\n256 240\n255\n")
         .expect("Failed to write PPM header");
     f.write_all(fb).expect("Failed to write PPM data");
     println!("Wrote {}", ppm_path);

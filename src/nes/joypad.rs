@@ -4,6 +4,12 @@ pub struct Joypad {
     buttons: u8,
 }
 
+impl Default for Joypad {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Joypad {
     pub fn new() -> Self {
         Self {

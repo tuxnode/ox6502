@@ -1,7 +1,7 @@
 use crate::nes::cartridge::Mirroring;
 use crate::nes::palette;
 
-/**
+/*
  * PPU (Picture Processing Unit) — minimal register-level definition
  * NES Dev Wiki: https://www.nesdev.org/wiki/PPU
  *
@@ -288,7 +288,7 @@ impl Ppu {
             0x3F00..=0x3FFF => {
                 let mut index = (addr & 0x1F) as usize;
                 // 镜像: $3F10/$3F14/$3F18/$3F1C → $3F00/$3F04/$3F08/$3F0C
-                if index >= 0x10 && index % 4 == 0 {
+                if index >= 0x10 && index.is_multiple_of(4) {
                     index -= 0x10;
                 }
                 self.palette[index]
@@ -323,7 +323,7 @@ impl Ppu {
             // Palette ($3F00-$3F1F) with mirrors
             0x3F00..=0x3FFF => {
                 let mut index = (addr & 0x1F) as usize;
-                if index >= 0x10 && index % 4 == 0 {
+                if index >= 0x10 && index.is_multiple_of(4) {
                     index -= 0x10;
                 }
                 self.palette[index] = val;
@@ -366,10 +366,10 @@ impl Ppu {
 
         for tile_row in 0..30 {
             for tile_col in 0..32 {
-                let tile_index = self.vram[(tile_row * 32 + tile_col) as usize] as u16;
+                let tile_index = self.vram[tile_row * 32 + tile_col] as u16;
 
                 let attr_idx = (tile_row / 4) * 8 + (tile_col / 4);
-                let attr_byte = self.vram[0x3C0 + attr_idx as usize];
+                let attr_byte = self.vram[0x3C0 + attr_idx];
                 let palette_shift = ((tile_col % 4) / 2) * 2 + ((tile_row % 4) / 2) * 4;
                 let palette_idx = (attr_byte >> palette_shift) & 0x03;
 
@@ -392,8 +392,8 @@ impl Ppu {
                         };
 
                         let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
-                        let px = (tile_col * 8 + x) as usize;
-                        let py = (tile_row * 8 + y) as usize;
+                        let px = tile_col * 8 + x;
+                        let py = tile_row * 8 + y;
                         let offset = (py * 256 + px) * 3;
                         self.frame_buffer[offset] = r;
                         self.frame_buffer[offset + 1] = g;
@@ -423,7 +423,7 @@ impl Ppu {
             let x = self.oam[i + 3] as i16;
 
             // Check visibility: 0 or >= 240 means off-screen (Y-1 is actual top)
-            if y >= 239 || y < 0 {
+            if !(0..239).contains(&y) {
                 continue;
             }
 
@@ -451,7 +451,7 @@ impl Ppu {
                     }
 
                     let px = (x + tx as i16) as usize;
-                    let py = (y as i16 + ty as i16) as usize;
+                    let py = (y + ty as i16) as usize;
 
                     if px >= 256 || py >= 240 {
                         continue;

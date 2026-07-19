@@ -62,6 +62,12 @@ pub struct Breakpoints {
     next_id: usize,
 }
 
+impl Default for Breakpoints {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Breakpoints {
     pub fn new() -> Self {
         Self {
@@ -95,6 +101,12 @@ impl Breakpoints {
 pub struct Monitor {
     pub breakpoints: Breakpoints,
     pub trace: VecDeque<TraceEntry>,
+}
+
+impl Default for Monitor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Monitor {

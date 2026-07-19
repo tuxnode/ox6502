@@ -231,7 +231,7 @@ impl<B: Bus> Cpu<B> {
             opcodes::ROL_ABS => { let a = self.absolute(); self.rol_mem(a); 6 }
             opcodes::ROL_ABSX => { let (_, a) = self.absolute_x(); self.rol_mem(a); 7 }
 
-            opcodes::ROR_A => { let c = self.a & 0x01 != 0; self.a = (self.a >> 1) | (self.get_flag(FLAG_C) as u8) * 0x80; self.set_flag(FLAG_C, c); self.update_nz(self.a); 2 }
+            opcodes::ROR_A => { let c = self.a & 0x01 != 0; self.a = (self.a >> 1) | ((self.get_flag(FLAG_C) as u8) * 0x80); self.set_flag(FLAG_C, c); self.update_nz(self.a); 2 }
             opcodes::ROR_ZP => { let a = self.zeropage(); self.ror_mem(a); 5 }
             opcodes::ROR_ZPX => { let a = self.zeropage_x(); self.ror_mem(a); 6 }
             opcodes::ROR_ABS => { let a = self.absolute(); self.ror_mem(a); 6 }
@@ -520,7 +520,7 @@ impl<B: Bus> Cpu<B> {
     fn ror_mem(&mut self, addr: u16) {
         let val = self.read(addr);
         let c = val & 0x01 != 0;
-        let result = (val >> 1) | (self.get_flag(FLAG_C) as u8) * 0x80;
+        let result = (val >> 1) | ((self.get_flag(FLAG_C) as u8) * 0x80);
         self.write(addr, result);
         self.set_flag(FLAG_C, c);
         self.update_nz(result);
@@ -610,7 +610,7 @@ impl<B: Bus> Cpu<B> {
     fn rra(&mut self, addr: u16) {
         let v = self.read(addr);
         let c = v & 0x01 != 0;
-        let rotated = (v >> 1) | (self.get_flag(FLAG_C) as u8) * 0x80;
+        let rotated = (v >> 1) | ((self.get_flag(FLAG_C) as u8) * 0x80);
         self.write(addr, rotated);
         self.set_flag(FLAG_C, c); // Set carry from ROR BEFORE ADC
         self.adc(rotated);         // ADC sets final N, V, Z, C

@@ -140,7 +140,7 @@ impl Monitor {
                 if i < line_len {
                     let byte = cpu.read(line_addr.wrapping_add(i));
                     hex.push_str(&format!("{:02X} ", byte));
-                    if byte >= 0x20 && byte <= 0x7E {
+                    if (0x20..=0x7E).contains(&byte) {
                         ascii.push(byte as char);
                     } else {
                         ascii.push('.');
@@ -256,17 +256,17 @@ impl Monitor {
             "c" | "continue" => Command::Continue,
             "r" | "regs" => Command::Registers,
             "d" | "dis" | "disassemble" => {
-                let addr = parts.next().and_then(|s| parse_addr(s));
+                let addr = parts.next().and_then(parse_addr);
                 let count = parts.next().and_then(|s| s.parse::<u8>().ok());
                 Command::Disassemble { addr, count }
             }
             "m" | "mem" | "memory" => {
-                let addr = parts.next().and_then(|s| parse_addr(s));
-                let len = parts.next().and_then(|s| parse_addr(s));
+                let addr = parts.next().and_then(parse_addr);
+                let len = parts.next().and_then(parse_addr);
                 Command::Memory { addr, len }
             }
             "b" => {
-                let addr = parts.next().and_then(|s| parse_addr(s));
+                let addr = parts.next().and_then(parse_addr);
                 match addr {
                     Some(a) => Command::Break { addr: a },
                     None => Command::Unknown(input.to_string()),

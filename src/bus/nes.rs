@@ -103,7 +103,7 @@ impl Bus for NesBus {
                 }
                 self.ppu.dma_write_oam(&page_data);
                 // DMA takes 513 cycles if OAMADDR even, 514 if odd
-                self.dma_cycles = if self.ppu.oam_addr % 2 == 0 { 513 } else { 514 };
+                self.dma_cycles = if self.ppu.oam_addr.is_multiple_of(2) { 513 } else { 514 };
             }
 
             // Joypad strobe ($4016 write)
