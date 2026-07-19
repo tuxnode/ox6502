@@ -10,11 +10,17 @@ cargo test           # run all unit + integration tests
 cargo run -- tests/roms/6502_functional_test.bin   # run Klaus Dormann 6502 test ROM
 cargo run -- tests/roms/65C02_extended_opcodes_test.bin   # run 65C02 extended test
 cargo run -- tests/roms/6502_functional_test.bin --debug   # interactive monitor
+cargo run --bin nes_sdl -- <game.nes>            # NES real-time display (SDL2)
+cargo run --bin nes_render -- <game.nes>         # NES offline frame → PPM
 ```
 
 No dev-dependencies, no formatter/linter config, no CI. Just `cargo build` and `cargo test`.
 
-Dependencies: `serde` + `serde_json` (for SST JSON test deserialization in `tests/sst_tests.rs`).
+Dependencies:
+- `serde` + `serde_json` — SST JSON test deserialization in `tests/sst_tests.rs`
+- `sdl2` (v0.38) — real-time NES display window (`nes_sdl` binary only)
+
+On macOS, install SDL2 via Homebrew: `brew install sdl2`
 
 ## Architecture
 
@@ -22,13 +28,20 @@ Dependencies: `serde` + `serde_json` (for SST JSON test deserialization in `test
 - `src/instructions.rs` — `step()` (giant match on opcode), `run()` (infinite loop), all instruction implementations including `adc`/`sbc`
 - `src/opcodes.rs` — opcode constant definitions (244 lines of `pub const`)
 - `src/addressing.rs` — all 13 addressing modes as methods on `Cpu<B>`, including NMOS JMP (ind) page boundary bug
-- `src/bus/mod.rs` — `Bus` trait (read/write)
-- `src/bus/simple.rs` — `SimpleBus` (64KB flat array)
+- `src/bus/mod.rs` — `Bus` trait (cpu_read/write, ppu_read/write, tick)
+- `src/bus/simple.rs` — `SimpleBus` (64KB flat array, for CPU test ROMs)
+- `src/bus/nes.rs` — `NesBus`: NES address routing, PPU/APU I/O, OAM DMA
+- `src/nes/cartridge.rs` — iNES ROM header parser (magic, mapper, mirroring, PRG/CHR banks)
+- `src/nes/ppu.rs` — PPU registers ($2000-$2007), loopy address system, tick timing, background+sprite rendering, frame buffer
+- `src/nes/palette.rs` — NTSC 64-color system palette table
+- `src/nes/mapper/nrom.rs` — NROM (mapper 0) stub
 - `src/monitor/mod.rs` — interactive debugger REPL (Monitor struct, run loop)
 - `src/monitor/commands.rs` — command parsing, execution, all monitor commands
 - `src/monitor/disass.rs` — disassembler (lookup table + disassemble_at)
 - `tests/cpu_tests.rs` — integration tests with `TestBus` (also 64KB flat array)
 - `src/main.rs` — CLI binary: loads ROM, runs CPU with trap detection, `--debug` for monitor
+- `src/bin/nes_render.rs` — offline NES frame renderer (loads .nes, runs N frames, writes PPM)
+- `src/bin/nes_sdl.rs` — real-time NES display window (requires SDL2)
 
 ## Key Quirks
 
@@ -41,6 +54,10 @@ Dependencies: `serde` + `serde_json` (for SST JSON test deserialization in `test
 - **KIL opcodes** (0x02, 0x12, etc.) lock the CPU — PC does not advance.
 - **JMP (ind) page boundary bug**: On NMOS, if the pointer crosses a page boundary, the high byte is read from the same page, not ptr+1.
 - `Cpu` is generic over `Bus` — use `TestBus` in tests, `SimpleBus` for CLI. Don't couple CPU to a concrete bus.
+- **PPU timing**: 1 CPU cycle = 3 PPU dots. `Bus::tick(cpu_cycles)` advances PPU by `cpu_cycles * 3` dots.
+- **NMI is non-maskable**: I flag does not block NMI (unlike IRQ). `tick()` signals NMI via `TickResult.nmi`.
+- **Background rendering**: Decodes nametable → attribute table → pattern table, writes 256×240 RGB frame buffer.
+- **Sprite rendering**: OAM decode, horizontal/vertical flip, priority-behind-background (attr bit 5), sprite palette at `palette[0x11..0x1F]`.
 
 ## What's Implemented vs Missing
 
