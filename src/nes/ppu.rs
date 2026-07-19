@@ -391,6 +391,21 @@ impl Ppu {
         }
     }
 
+    /// Get current scanline
+    pub fn scanline(&self) -> u16 {
+        self.scanline
+    }
+
+    /// Get current dot
+    pub fn dot(&self) -> u16 {
+        self.dot
+    }
+
+    /// Get completed frame count
+    pub fn frame(&self) -> u64 {
+        self.frame
+    }
+
     /// Get current VRAM address (for rendering)
     pub fn vram_addr(&self) -> u16 {
         self.v
@@ -406,8 +421,23 @@ impl Ppu {
         self.ctrl
     }
 
+    /// Get PPUMASK value
+    pub fn mask(&self) -> u8 {
+        self.mask
+    }
+
+    /// Get PPUSTATUS value
+    pub fn status(&self) -> u8 {
+        self.status
+    }
+
     /// Copy t to v (used at end of vblank / start of rendering)
     pub fn copy_t_to_v(&mut self) {
         self.v = self.t;
+    }
+
+    /// Get the frame buffer slice (RGB bytes, 256x240)
+    pub fn frame_buffer(&self) -> &[u8] {
+        &self.frame_buffer
     }
 }
