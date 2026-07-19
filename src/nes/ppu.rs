@@ -457,7 +457,7 @@ impl Ppu {
                         }
                     }
 
-                    let palette_entry = self.palette[0x11 + palette_idx * 4 + color_idx as usize];
+                    let palette_entry = self.palette[0x11 + palette_idx * 4 + (color_idx - 1) as usize];
                     let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
                     let offset = (py * 256 + px) * 3;
                     self.frame_buffer[offset] = r;
