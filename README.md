@@ -21,35 +21,44 @@ MOS 6502 / CMOS W65C02 CPU emulator with NES system emulation, written in Rust.
 - OAM DMA ($4014) with cycle penalty
 - NMI interrupt handling
 - CPU main loop with DMA/NMI support
+- Background rendering (nametable → attribute → pattern → palette pipeline)
+- Sprite rendering (OAM decode, flip, priority)
+- Frame buffer output (256x240 RGB)
+- SDL2 real-time display window (3x scaled)
+- Offline PPM renderer for headless frame capture
 
 ## Project Structure
 ```
 ox6502/
 ├── src/
 │   ├── lib.rs
-│   ├── main.rs
-│   ├── cpu.rs              # CPU registers and core operations
-│   ├── instructions.rs     # Instruction implementations
-│   ├── addressing.rs       # Addressing modes
-│   ├── opcodes.rs          # Opcode constants
+│   ├── main.rs                    # CPU test ROM runner
+│   ├── cpu.rs                     # CPU registers and core operations
+│   ├── instructions.rs            # Instruction implementations
+│   ├── addressing.rs              # Addressing modes
+│   ├── opcodes.rs                 # Opcode constants
 │   ├── bus/
-│   │   ├── mod.rs          # Bus trait (cpu_read/write, ppu_read/write, tick)
-│   │   ├── simple.rs       # SimpleBus (64KB flat memory for CPU tests)
-│   │   └── nes.rs          # NesBus (NES address routing + PPU/APU)
+│   │   ├── mod.rs                 # Bus trait (cpu_read/write, ppu_read/write, tick)
+│   │   ├── simple.rs              # SimpleBus (64KB flat memory for CPU tests)
+│   │   └── nes.rs                 # NesBus (NES address routing + PPU/APU)
 │   ├── nes/
 │   │   ├── mod.rs
-│   │   ├── cartridge.rs    # iNES parser
-│   │   ├── ppu.rs          # PPU registers and memory
+│   │   ├── cartridge.rs           # iNES parser
+│   │   ├── palette.rs             # NTSC system palette (64 colors)
+│   │   ├── ppu.rs                 # PPU registers, rendering, frame buffer
 │   │   └── mapper/
 │   │       ├── mod.rs
-│   │       └── nrom.rs     # NROM mapper (stub)
+│   │       └── nrom.rs            # NROM mapper (stub)
+│   ├── bin/
+│   │   ├── nes_render.rs          # Offline NES frame → PPM renderer
+│   │   └── nes_sdl.rs             # Real-time NES display (SDL2 window)
 │   └── monitor/
 │       ├── mod.rs
 │       ├── commands.rs
 │       └── disass.rs
 └── tests/
-    ├── cpu_tests.rs        # CPU integration tests
-    └── sst_tests.rs        # SST opcode tests
+    ├── cpu_tests.rs               # CPU integration tests
+    └── sst_tests.rs               # SST opcode tests
 ```
 
 ## Build & Test
@@ -81,6 +90,28 @@ cargo run -- tests/roms/6502_functional_test.bin --debug
 | `q`, `quit` | Exit monitor |
 
 Press Enter to repeat the last command.
+
+## NES Rendering
+
+```bash
+# Real-time display (requires SDL2)
+cargo run --bin nes_sdl -- <game.nes>
+
+# Offline frame capture (no SDL2 needed)
+cargo run --bin nes_render -- <game.nes> [frames]
+```
+
+## PPU Memory Map
+
+| Address | Size | Content |
+|---------|------|---------|
+| $0000-$0FFF | 4KB | Pattern table 0 (CHR ROM) |
+| $1000-$1FFF | 4KB | Pattern table 1 (CHR ROM) |
+| $2000-$23FF | 1KB | Nametable 0 |
+| $2400-$27FF | 1KB | Nametable 1 |
+| $2800-$2BFF | 1KB | Nametable 2 (mirror) |
+| $2C00-$2FFF | 1KB | Nametable 3 (mirror) |
+| $3F00-$3F1F | 32B | Palette RAM |
 
 ## NES CPU Memory Map
 
