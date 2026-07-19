@@ -36,6 +36,31 @@ fn main() {
     let mut frame_timer = Instant::now();
     let frame_duration = std::time::Duration::from_micros(16_667); // ~60 FPS
 
+    // NES joypad button bit constants
+    const BTN_A: u8 = 1 << 0;
+    const BTN_B: u8 = 1 << 1;
+    const BTN_SELECT: u8 = 1 << 2;
+    const BTN_START: u8 = 1 << 3;
+    const BTN_UP: u8 = 1 << 4;
+    const BTN_DOWN: u8 = 1 << 5;
+    const BTN_LEFT: u8 = 1 << 6;
+    const BTN_RIGHT: u8 = 1 << 7;
+
+    let update_joypad = |bus: &mut NesBus, keycode: Option<sdl2::keyboard::Keycode>, pressed: bool| {
+        let bit = match keycode {
+            Some(sdl2::keyboard::Keycode::A) => BTN_A,
+            Some(sdl2::keyboard::Keycode::S) => BTN_B,
+            Some(sdl2::keyboard::Keycode::Backspace) => BTN_SELECT,
+            Some(sdl2::keyboard::Keycode::Return) => BTN_START,
+            Some(sdl2::keyboard::Keycode::Up) => BTN_UP,
+            Some(sdl2::keyboard::Keycode::Down) => BTN_DOWN,
+            Some(sdl2::keyboard::Keycode::Left) => BTN_LEFT,
+            Some(sdl2::keyboard::Keycode::Right) => BTN_RIGHT,
+            _ => return,
+        };
+        bus.joypad1.set_button(bit, pressed);
+    };
+
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -44,6 +69,12 @@ fn main() {
                     keycode: Some(sdl2::keyboard::Keycode::Escape),
                     ..
                 } => break 'running,
+                sdl2::event::Event::KeyDown { keycode, .. } => {
+                    update_joypad(cpu.bus_mut(), keycode, true);
+                }
+                sdl2::event::Event::KeyUp { keycode, .. } => {
+                    update_joypad(cpu.bus_mut(), keycode, false);
+                }
                 _ => {}
             }
         }
