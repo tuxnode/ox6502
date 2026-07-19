@@ -1,4 +1,5 @@
 use std::fs;
+use std::time::Instant;
 
 use ox6502::bus::nes::NesBus;
 use ox6502::bus::Bus;
@@ -32,6 +33,8 @@ fn main() {
         .expect("Texture creation failed");
 
     let mut event_pump = sdl.event_pump().expect("Event pump creation failed");
+    let mut frame_timer = Instant::now();
+    let frame_duration = std::time::Duration::from_micros(16_667); // ~60 FPS
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -69,5 +72,12 @@ fn main() {
         canvas.clear();
         canvas.copy(&texture, None, None).expect("Texture copy failed");
         canvas.present();
+
+        // Throttle to ~60 FPS
+        let elapsed = frame_timer.elapsed();
+        if elapsed < frame_duration {
+            std::thread::sleep(frame_duration - elapsed);
+        }
+        frame_timer = Instant::now();
     }
 }
