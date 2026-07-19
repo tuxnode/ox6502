@@ -102,6 +102,7 @@ impl Ppu {
             if self.scanline == 241 {
                 if self.rendering_enabled() {
                     self.render_background();
+                    self.render_sprites();
                 }
                 self.set_vblank();
             }
@@ -386,6 +387,82 @@ impl Ppu {
                         self.frame_buffer[offset + 1] = g;
                         self.frame_buffer[offset + 2] = b;
                     }
+                }
+            }
+        }
+    }
+
+    pub fn render_sprites(&mut self) {
+        if (self.mask & MASK_SHOW_SPR) == 0 {
+            return;
+        }
+
+        let bank: u16 = if (self.ctrl & CTRL_SPR_ADDR) != 0 {
+            0x1000
+        } else {
+            0x0000
+        };
+
+        // Iterate in reverse so sprite 0 (highest priority) draws last
+        for i in (0..self.oam.len()).step_by(4).rev() {
+            let y = self.oam[i] as i16;
+            let tile_index = self.oam[i + 1] as u16;
+            let attr = self.oam[i + 2];
+            let x = self.oam[i + 3] as i16;
+
+            // Check visibility: 0 or >= 240 means off-screen (Y-1 is actual top)
+            if y >= 239 || y < 0 {
+                continue;
+            }
+
+            let flip_h = (attr & 0x40) != 0;
+            let flip_v = (attr & 0x80) != 0;
+            let palette_idx = (attr & 0x03) as usize;
+            let priority_behind = (attr & 0x20) != 0;
+
+            let tile_addr = (bank + tile_index * 16) as usize;
+
+            for ty in 0..8 {
+                let sy = if flip_v { 7 - ty } else { ty };
+                let lo_byte = self.chr_rom[tile_addr + sy];
+                let hi_byte = self.chr_rom[tile_addr + 8 + sy];
+
+                for tx in 0..8 {
+                    let sx = if flip_h { 7 - tx } else { tx };
+                    let bit = 7 - sx;
+                    let lo = (lo_byte >> bit) & 1;
+                    let hi = (hi_byte >> bit) & 1;
+                    let color_idx = (hi << 1) | lo;
+
+                    if color_idx == 0 {
+                        continue; // transparent
+                    }
+
+                    let px = (x + tx as i16) as usize;
+                    let py = (y as i16 + ty as i16) as usize;
+
+                    if px >= 256 || py >= 240 {
+                        continue;
+                    }
+
+                    if priority_behind {
+                        // Check if background pixel is non-zero at this position
+                        let bg_offset = (py * 256 + px) * 3;
+                        if bg_offset + 2 < self.frame_buffer.len()
+                            && (self.frame_buffer[bg_offset] != 0
+                                || self.frame_buffer[bg_offset + 1] != 0
+                                || self.frame_buffer[bg_offset + 2] != 0)
+                        {
+                            continue; // sprite behind background
+                        }
+                    }
+
+                    let palette_entry = self.palette[0x11 + palette_idx * 4 + color_idx as usize];
+                    let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+                    let offset = (py * 256 + px) * 3;
+                    self.frame_buffer[offset] = r;
+                    self.frame_buffer[offset + 1] = g;
+                    self.frame_buffer[offset + 2] = b;
                 }
             }
         }
