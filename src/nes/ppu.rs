@@ -306,8 +306,12 @@ impl Ppu {
     /// Write byte to PPU address space
     pub fn ppu_write(&mut self, addr: u16, val: u8) {
         match addr {
-            // Pattern tables — read only, ignore writes
-            0x0000..=0x1FFF => {}
+            // Pattern tables — write to CHR RAM (for CHR RAM mappers like MMC1)
+            0x0000..=0x1FFF => {
+                if (addr as usize) < self.chr_rom.len() {
+                    self.chr_rom[addr as usize] = val;
+                }
+            }
 
             // Nametables ($2000-$2FFF)
             0x2000..=0x2FFF => {
