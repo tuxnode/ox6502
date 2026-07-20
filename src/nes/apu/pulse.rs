@@ -107,6 +107,10 @@ impl Pulse {
         self.envelope_start = true;
     }
 
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
     pub fn set_enabled(&mut self, val: bool) {
         self.enabled = val;
         if !val {

@@ -64,6 +64,10 @@ impl Triangle {
         self.linear_reload = self.linear_counter;
     }
 
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
     pub fn set_enabled(&mut self, val: bool) {
         self.enabled = val;
         if !val {
