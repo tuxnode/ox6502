@@ -9,6 +9,7 @@ struct SstTest {
     initial: CpuState,
     #[serde(rename = "final")]
     final_state: CpuState,
+    #[allow(dead_code)]
     cycles: Vec<Vec<serde_json::Value>>,
 }
 
@@ -70,10 +71,7 @@ fn run_sst_test(test: &SstTest) -> bool {
     cpu.status = test.initial.p;
 
     // Execute one instruction
-    let init_p = cpu.status;
-    let init_pc = cpu.pc;
     cpu.step();
-    let final_p = cpu.status;
 
     // Debug: print first failure details
     let mut failed_check = "";

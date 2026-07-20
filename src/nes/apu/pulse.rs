@@ -1,5 +1,5 @@
-/// NES APU Pulse Channel
-/// Reference: https://www.nesdev.org/wiki/APU_Pulse
+//! NES APU Pulse Channel
+//! Reference: https://www.nesdev.org/wiki/APU_Pulse
 
 const DUTY_TABLE: [[f32; 8]; 4] = [
     [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], // 12.5%
@@ -44,6 +44,12 @@ pub struct Pulse {
     sweep_divider: u8,
     sweep_reload: bool,
     sweep_mute: bool,
+}
+
+impl Default for Pulse {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Pulse {

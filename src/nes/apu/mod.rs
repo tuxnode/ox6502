@@ -30,6 +30,12 @@ pub struct Apu {
 const SAMPLE_RATE: u32 = 44100;
 const CPU_FREQ: u32 = 1_789_773;
 
+impl Default for Apu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Apu {
     pub fn new() -> Self {
         Self {

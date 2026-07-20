@@ -44,6 +44,7 @@ impl Bus for TestBus {
 }
 
 // Helper to create a CPU with reset vector pointing to $0400
+#[allow(dead_code)]
 fn create_test_cpu() -> Cpu<TestBus> {
     let mut bus = TestBus::new();
     // Set reset vector at $FFFC-$FFFD to point to $0400
@@ -52,26 +53,10 @@ fn create_test_cpu() -> Cpu<TestBus> {
     Cpu::new(bus)
 }
 
-// Helper to create CPU with custom reset vector
-fn create_cpu_with_reset(addr: u16) -> Cpu<TestBus> {
-    let mut bus = TestBus::new();
-    bus.memory[0xFFFC] = (addr & 0xFF) as u8;
-    bus.memory[0xFFFD] = ((addr >> 8) & 0xFF) as u8;
-    Cpu::new(bus)
-}
-
-// Helper to run N steps
-fn run_steps(cpu: &mut Cpu<TestBus>, n: usize) {
-    for _ in 0..n {
-        cpu.step();
-    }
-}
-
 // ==================== Load/Store Tests ====================
 
 #[test]
 fn test_lda_immediate() {
-    let mut cpu = create_test_cpu();
     let mut bus = TestBus::new();
     bus.load_program(&[LDA_IMM, 0x42], 0x0400);
     bus.memory[0xFFFC] = 0x00;

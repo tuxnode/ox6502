@@ -1,5 +1,5 @@
-/// NES APU Triangle Channel
-/// Reference: https://www.nesdev.org/wiki/APU_Triangle
+//! NES APU Triangle Channel
+//! Reference: https://www.nesdev.org/wiki/APU_Triangle
 
 const TRIANGLE_TABLE: [f32; 32] = [
     15.0, 14.0, 13.0, 12.0, 11.0, 10.0, 9.0, 8.0,
@@ -30,6 +30,12 @@ pub struct Triangle {
 
     // Phase -- Index TRIANGLE_TABLE
     duty_pos: u8,
+}
+
+impl Default for Triangle {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Triangle {
