@@ -1,3 +1,4 @@
+pub mod apu;
 pub mod cartridge;
 pub mod joypad;
 pub mod mapper;
