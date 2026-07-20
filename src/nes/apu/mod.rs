@@ -5,6 +5,7 @@ mod pulse;
 mod triangle;
 
 use pulse::Pulse;
+use triangle::Triangle;
 
 pub struct Apu {
     pulse1: Pulse,
