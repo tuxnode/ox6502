@@ -19,7 +19,7 @@ pub struct Apu {
 
     // Frame counter
     frame_counter: u32,
-    frame_mode: u8,        // 0 = 4-step, 1 = 5-step
+    frame_mode: u8, // 0 = 4-step, 1 = 5-step
     frame_interrupt: bool,
 
     // Sample output
@@ -50,12 +50,22 @@ impl Apu {
     /// $4015 read: status register
     pub fn read_status(&self) -> u8 {
         let mut status = 0;
-        if self.pulse1.enabled() { status |= 0x01; }
-        if self.pulse2.enabled() { status |= 0x02; }
-        if self.triangle.enabled() { status |= 0x04; }
-        if self.noise.enabled() { status |= 0x08; }
+        if self.pulse1.enabled() {
+            status |= 0x01;
+        }
+        if self.pulse2.enabled() {
+            status |= 0x02;
+        }
+        if self.triangle.enabled() {
+            status |= 0x04;
+        }
+        if self.noise.enabled() {
+            status |= 0x08;
+        }
         // if self.dmc.enabled() { status |= 0x10; }
-        if self.frame_interrupt { status |= 0x40; }
+        if self.frame_interrupt {
+            status |= 0x40;
+        }
         status
     }
 
