@@ -5,6 +5,7 @@ use ox6502::bus::nes::NesBus;
 use ox6502::bus::Bus;
 use ox6502::cpu::Cpu;
 use ox6502::nes::cartridge;
+use sdl2::audio::AudioQueue;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -21,6 +22,8 @@ fn main() {
 
     let sdl = sdl2::init().expect("SDL2 init failed");
     let video = sdl.video().expect("SDL2 video init failed");
+    let audio_subsystem = sdl.audio().expect("SDL2 audio init failed");
+
     let window = video
         .window("ox6502", 256 * 3, 240 * 3)
         .position_centered()
@@ -31,6 +34,17 @@ fn main() {
     let mut texture = texture_creator
         .create_texture_streaming(sdl2::pixels::PixelFormatEnum::RGB24, 256, 240)
         .expect("Texture creation failed");
+
+    let desired_spec = sdl2::audio::AudioSpecDesired {
+        freq: Some(44100),
+        channels: Some(1),
+        samples: Some(2048),
+    };
+
+    let audio_queue: AudioQueue<f32> = audio_subsystem
+        .open_queue(None, &desired_spec)
+        .expect("Failed to open audio queue");
+    audio_queue.resume();
 
     let mut event_pump = sdl.event_pump().expect("Event pump creation failed");
     let mut frame_timer = Instant::now();
@@ -92,6 +106,12 @@ fn main() {
                 cpu.handle_nmi();
                 frame_done = true;
             }
+        }
+
+        // Queue audio samples
+        let samples = cpu.bus_mut().apu.take_samples();
+        if !samples.is_empty() {
+            audio_queue.queue_audio(&samples).expect("Audio queue failed");
         }
 
         // Copy frame buffer to SDL texture

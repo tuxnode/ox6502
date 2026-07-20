@@ -4,6 +4,7 @@
  */
 use crate::{
     bus::{Bus, TickResult},
+    nes::apu::Apu,
     nes::cartridge::Cartridge,
     nes::joypad::Joypad,
     nes::mapper,
@@ -15,6 +16,7 @@ pub struct NesBus {
     ram: [u8; 2048],       // 2KB internal RAM
     prg_ram: [u8; 0x2000], // 8KB PRG RAM ($6000-$7FFF)
     pub ppu: Ppu,          // PPU instance
+    pub apu: Apu,          // APU instance
     pub joypad1: Joypad,   // Player 1 controller
     joypad2: Joypad,       // Player 2 controller
     mapper: Box<dyn Mapper>,
@@ -28,6 +30,7 @@ impl NesBus {
             ram: [0; 2048],
             prg_ram: [0; 0x2000],
             ppu: Ppu::new(chr_rom),
+            apu: Apu::new(),
             joypad1: Joypad::new(),
             joypad2: Joypad::new(),
             mapper: mapper::from_cartridge(cart),
@@ -68,8 +71,10 @@ impl Bus for NesBus {
             0x4016 => self.joypad1.read(),
             // Joypad 2 ($4017)
             0x4017 => self.joypad2.read(),
-            // Other APU and I/O registers
-            0x4000..=0x4015 | 0x4018..=0x401F => 0,
+            // APU status ($4015)
+            0x4015 => self.apu.read_status(),
+            // Other I/O registers (stub)
+            0x4000..=0x4014 | 0x4018..=0x401F => 0,
 
             // Cartridge PRG RAM ($6000-$7FFF)
             0x6000..=0x7FFF => self.prg_ram[(addr - 0x6000) as usize],
@@ -108,8 +113,34 @@ impl Bus for NesBus {
 
             // Joypad strobe ($4016 write)
             0x4016 => self.joypad1.write(val),
-            // APU and I/O (stub)
-            0x4000..=0x4015 | 0x4017..=0x401F => {}
+
+            // APU registers ($4000-$4013)
+            0x4000 => self.apu.pulse1.write_reg0(val),
+            0x4001 => self.apu.pulse1.write_reg1(val),
+            0x4002 => self.apu.pulse1.write_reg2(val),
+            0x4003 => self.apu.pulse1.write_reg3(val),
+            0x4004 => self.apu.pulse2.write_reg0(val),
+            0x4005 => self.apu.pulse2.write_reg1(val),
+            0x4006 => self.apu.pulse2.write_reg2(val),
+            0x4007 => self.apu.pulse2.write_reg3(val),
+            0x4008 => self.apu.triangle.write_reg0(val),
+            // 0x4009 is unused
+            0x400A => self.apu.triangle.write_reg2(val),
+            0x400B => self.apu.triangle.write_reg3(val),
+            0x400C => self.apu.noise.write_reg0(val),
+            // 0x400D is unused
+            0x400E => self.apu.noise.write_reg1(val),
+            0x400F => self.apu.noise.write_reg2(val),
+            // 0x4010-$4013: DMC (stub)
+            0x4010..=0x4013 => {}
+
+            // APU status ($4015)
+            0x4015 => self.apu.write_status(val),
+            // APU frame counter ($4017)
+            0x4017 => self.apu.write_frame_counter(val),
+
+            // Other I/O registers (stub)
+            0x4018..=0x401F => {}
 
             // Cartridge PRG RAM
             0x6000..=0x7FFF => {
@@ -143,6 +174,10 @@ impl Bus for NesBus {
         self.ppu.set_mirroring(self.mapper.mirroring());
         // Advance PPU first (may set nmi_pending when entering VBlank)
         self.tick_ppu(cpu_cycles);
+        // Clock APU
+        for _ in 0..cpu_cycles {
+            self.apu.tick();
+        }
         // Then check for NMI
         let nmi = self.check_nmi();
         TickResult {
