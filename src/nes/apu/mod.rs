@@ -2,19 +2,19 @@
  * APU References: https://www.nesdev.org/wiki/APU_basics
  * Frame Counter: https://www.nesdev.org/wiki/APU_Frame_Counter
  */
-mod noise;
-mod pulse;
-mod triangle;
+pub mod noise;
+pub mod pulse;
+pub mod triangle;
 
 use noise::Noise;
 use pulse::Pulse;
 use triangle::Triangle;
 
 pub struct Apu {
-    pulse1: Pulse,
-    pulse2: Pulse,
-    triangle: Triangle,
-    noise: Noise,
+    pub pulse1: Pulse,
+    pub pulse2: Pulse,
+    pub triangle: Triangle,
+    pub noise: Noise,
     // dmc: Dmc,
 
     // Frame counter
