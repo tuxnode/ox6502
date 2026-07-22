@@ -196,7 +196,7 @@ impl Ppu {
             5 => {
                 if !self.w {
                     // First write: X scroll
-                    self.t = (self.t & 0xFFE0) | ((val as u16) & 0x1F);
+                    self.t = (self.t & 0xFFE0) | (((val as u16) >> 3) & 0x1F);
                     self.x = val & 0x07;
                     self.w = true;
                 } else {
@@ -364,42 +364,55 @@ impl Ppu {
             0x0000
         };
 
-        for tile_row in 0..30 {
-            for tile_col in 0..32 {
-                let tile_index = self.vram[tile_row * 32 + tile_col] as u16;
+        let scroll_x = (((self.t & 0x001F) as usize) * 8) + self.x as usize;
+        let scroll_y = ((((self.t >> 5) & 0x001F) as usize) * 8) + (((self.t >> 12) & 0x0007) as usize);
+        let base_nt = ((self.t >> 10) & 0x03) as usize;
 
-                let attr_idx = (tile_row / 4) * 8 + (tile_col / 4);
-                let attr_byte = self.vram[0x3C0 + attr_idx];
+        for py in 0..FB_HEIGHT {
+            let world_y = py + scroll_y;
+            let nt_y = (world_y / 240) & 0x01;
+            let tile_row = (world_y / 8) % 30;
+            let fine_y = world_y % 8;
+
+            for px in 0..FB_WIDTH {
+                let world_x = px + scroll_x;
+                let nt_x = (world_x / 256) & 0x01;
+                let tile_col = (world_x / 8) % 32;
+                let fine_x = world_x % 8;
+                let nt = base_nt ^ nt_x ^ (nt_y << 1);
+
+                let nt_base = 0x2000 + (nt as u16) * 0x0400;
+                let tile_addr_in_nt = nt_base + (tile_row * 32 + tile_col) as u16;
+                let tile_index = self.ppu_read(tile_addr_in_nt) as u16;
+
+                let attr_addr = nt_base + 0x03C0 + ((tile_row / 4) * 8 + (tile_col / 4)) as u16;
+                let attr_byte = self.ppu_read(attr_addr);
                 let palette_shift = ((tile_col % 4) / 2) * 2 + ((tile_row % 4) / 2) * 4;
                 let palette_idx = (attr_byte >> palette_shift) & 0x03;
 
-                let tile_addr = (bank + tile_index * 16) as usize;
-                for y in 0..8 {
-                    let lo_byte = self.chr_rom[tile_addr + y];
-                    let hi_byte = self.chr_rom[tile_addr + 8 + y];
-
-                    for x in 0..8 {
-                        let bit = 7 - x;
-                        let lo = (lo_byte >> bit) & 1;
-                        let hi = (hi_byte >> bit) & 1;
-                        let color_idx = (hi << 1) | lo;
-
-                        // Check Color
-                        let palette_entry = if color_idx == 0 {
-                            self.palette[0]
-                        } else {
-                            self.palette[(palette_idx as usize) * 4 + color_idx as usize]
-                        };
-
-                        let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
-                        let px = tile_col * 8 + x;
-                        let py = tile_row * 8 + y;
-                        let offset = (py * 256 + px) * 3;
-                        self.frame_buffer[offset] = r;
-                        self.frame_buffer[offset + 1] = g;
-                        self.frame_buffer[offset + 2] = b;
-                    }
+                let pattern_addr = (bank + tile_index * 16) as usize;
+                if pattern_addr + 15 >= self.chr_rom.len() {
+                    continue;
                 }
+
+                let lo_byte = self.chr_rom[pattern_addr + fine_y];
+                let hi_byte = self.chr_rom[pattern_addr + 8 + fine_y];
+                let bit = 7 - fine_x;
+                let lo = (lo_byte >> bit) & 1;
+                let hi = (hi_byte >> bit) & 1;
+                let color_idx = (hi << 1) | lo;
+
+                let palette_entry = if color_idx == 0 {
+                    self.palette[0]
+                } else {
+                    self.palette[(palette_idx as usize) * 4 + color_idx as usize]
+                };
+
+                let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+                let offset = (py * FB_WIDTH + px) * 3;
+                self.frame_buffer[offset] = r;
+                self.frame_buffer[offset + 1] = g;
+                self.frame_buffer[offset + 2] = b;
             }
         }
     }
@@ -554,5 +567,38 @@ impl Ppu {
     /// Get the frame buffer slice (RGB bytes, 256x240)
     pub fn frame_buffer(&self) -> &[u8] {
         &self.frame_buffer
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn set_tile_color(ppu: &mut Ppu, tile: usize, color_idx: u8) {
+        let base = tile * 16;
+        let lo = if (color_idx & 0x01) != 0 { 0xFF } else { 0x00 };
+        let hi = if (color_idx & 0x02) != 0 { 0xFF } else { 0x00 };
+        for row in 0..8 {
+            ppu.chr_rom[base + row] = lo;
+            ppu.chr_rom[base + 8 + row] = hi;
+        }
+    }
+
+    #[test]
+    fn render_background_uses_horizontal_scroll() {
+        let mut ppu = Ppu::new(vec![0; 0x2000]);
+        set_tile_color(&mut ppu, 0, 1);
+        set_tile_color(&mut ppu, 1, 2);
+        ppu.ppu_write(0x2000, 0);
+        ppu.ppu_write(0x2001, 1);
+        ppu.ppu_write(0x3F01, 0x01);
+        ppu.ppu_write(0x3F02, 0x02);
+
+        ppu.write_register(0x2005, 8);
+        ppu.write_register(0x2005, 0);
+        ppu.render_background();
+
+        let expected = palette::SYSTEM_PALETTE[0x02];
+        assert_eq!(&ppu.frame_buffer()[0..3], &[expected.0, expected.1, expected.2]);
     }
 }

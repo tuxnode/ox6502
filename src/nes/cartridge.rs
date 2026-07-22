@@ -106,9 +106,9 @@ pub fn parse(data: &[u8]) -> Result<Cartridge, CartridgeError> {
     let mirroring = if flags_6 & 0x08 != 0 {
         Mirroring::FourScreen
     } else if flags_6 & 0x01 != 0 {
-        Mirroring::Horizontal
-    } else {
         Mirroring::Vertical
+    } else {
+        Mirroring::Horizontal
     };
 
     let header_size = 16;
@@ -141,4 +141,38 @@ pub fn parse(data: &[u8]) -> Result<Cartridge, CartridgeError> {
         prg_rom,
         chr_rom,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ines_header(flags_6: u8) -> Vec<u8> {
+        let mut data = vec![0; 16 + 0x4000];
+        data[0..4].copy_from_slice(b"NES\x1A");
+        data[4] = 1;
+        data[6] = flags_6;
+        data
+    }
+
+    #[test]
+    fn parse_flags_6_bit_0_clear_as_horizontal_mirroring() {
+        let cart = parse(&ines_header(0x00)).expect("valid cartridge");
+
+        assert_eq!(cart.mirroring, Mirroring::Horizontal);
+    }
+
+    #[test]
+    fn parse_flags_6_bit_0_set_as_vertical_mirroring() {
+        let cart = parse(&ines_header(0x01)).expect("valid cartridge");
+
+        assert_eq!(cart.mirroring, Mirroring::Vertical);
+    }
+
+    #[test]
+    fn parse_flags_6_four_screen_overrides_bit_0_mirroring() {
+        let cart = parse(&ines_header(0x09)).expect("valid cartridge");
+
+        assert_eq!(cart.mirroring, Mirroring::FourScreen);
+    }
 }
