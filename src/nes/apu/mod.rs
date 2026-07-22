@@ -186,13 +186,24 @@ impl Apu {
 
     /// Mix channels to single sample (0.0 ~ 1.0)
     fn mix(&self) -> f32 {
-        let pulse1 = self.pulse1.output();
-        let pulse2 = self.pulse2.output();
-        let triangle = self.triangle.output();
-        let noise = self.noise.output();
+        let pulse1 = self.pulse1.output() * 15.0;
+        let pulse2 = self.pulse2.output() * 15.0;
+        let triangle = self.triangle.output() * 15.0;
+        let noise = self.noise.output() * 15.0;
 
-        let pulse_out = 0.00752 * (pulse1 + pulse2);
-        let tnd_out = 0.00851 * triangle + 0.00494 * noise;
+        let pulse_sum = pulse1 + pulse2;
+        let pulse_out = if pulse_sum > 0.0 {
+            95.88 / ((8128.0 / pulse_sum) + 100.0)
+        } else {
+            0.0
+        };
+
+        let tnd_sum = triangle / 8227.0 + noise / 12241.0;
+        let tnd_out = if tnd_sum > 0.0 {
+            159.79 / ((1.0 / tnd_sum) + 100.0)
+        } else {
+            0.0
+        };
 
         pulse_out + tnd_out
     }

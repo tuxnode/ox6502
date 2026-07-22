@@ -6,8 +6,8 @@ const NOISE_TABLE: [u16; 16] = [
 ];
 
 const LENGTH_TABLE: [u8; 32] = [
-    10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
-    12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30,
+    10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
+    192, 24, 72, 26, 16, 28, 32, 30,
 ];
 
 pub struct Noise {
@@ -76,7 +76,7 @@ impl Noise {
 
     /// $400F: LLLL.L---
     pub fn write_reg2(&mut self, val: u8) {
-        if self.enabled && !self.length_halt {
+        if self.enabled {
             self.length_counter = LENGTH_TABLE[((val >> 3) & 0x1F) as usize];
         }
         self.envelope_start = true;
@@ -145,5 +145,21 @@ impl Noise {
             self.volume_output as f32
         };
         volume / 15.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Noise;
+
+    #[test]
+    fn write_length_loads_counter_even_when_halted() {
+        let mut noise = Noise::new();
+        noise.set_enabled(true);
+        noise.write_reg0(0x30);
+        noise.write_reg1(0x00);
+        noise.write_reg2(0x08);
+
+        assert!(noise.length_counter > 0);
     }
 }

@@ -28,7 +28,10 @@ fn main() {
         .position_centered()
         .build()
         .expect("Window creation failed");
-    let mut canvas = window.into_canvas().build().expect("Canvas creation failed");
+    let mut canvas = window
+        .into_canvas()
+        .build()
+        .expect("Canvas creation failed");
     let texture_creator = canvas.texture_creator();
     let mut texture = texture_creator
         .create_texture_streaming(sdl2::pixels::PixelFormatEnum::RGB24, 256, 240)
@@ -59,20 +62,23 @@ fn main() {
     const BTN_LEFT: u8 = 1 << 6;
     const BTN_RIGHT: u8 = 1 << 7;
 
-    let update_joypad = |bus: &mut NesBus, keycode: Option<sdl2::keyboard::Keycode>, pressed: bool| {
-        let bit = match keycode {
-            Some(sdl2::keyboard::Keycode::A) => BTN_A,
-            Some(sdl2::keyboard::Keycode::S) => BTN_B,
-            Some(sdl2::keyboard::Keycode::Backspace) => BTN_SELECT,
-            Some(sdl2::keyboard::Keycode::Return) => BTN_START,
-            Some(sdl2::keyboard::Keycode::Up) => BTN_UP,
-            Some(sdl2::keyboard::Keycode::Down) => BTN_DOWN,
-            Some(sdl2::keyboard::Keycode::Left) => BTN_LEFT,
-            Some(sdl2::keyboard::Keycode::Right) => BTN_RIGHT,
-            _ => return,
+    let update_joypad =
+        |bus: &mut NesBus, keycode: Option<sdl2::keyboard::Keycode>, pressed: bool| {
+            let bit = match keycode {
+                Some(sdl2::keyboard::Keycode::A) => BTN_A,
+                Some(sdl2::keyboard::Keycode::S) => BTN_B,
+                Some(sdl2::keyboard::Keycode::Backspace) => BTN_SELECT,
+                Some(sdl2::keyboard::Keycode::Return) | Some(sdl2::keyboard::Keycode::KpEnter) => {
+                    BTN_START
+                }
+                Some(sdl2::keyboard::Keycode::Up) => BTN_UP,
+                Some(sdl2::keyboard::Keycode::Down) => BTN_DOWN,
+                Some(sdl2::keyboard::Keycode::Left) => BTN_LEFT,
+                Some(sdl2::keyboard::Keycode::Right) => BTN_RIGHT,
+                _ => return,
+            };
+            bus.joypad1.set_button(bit, pressed);
         };
-        bus.joypad1.set_button(bit, pressed);
-    };
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -106,7 +112,9 @@ fn main() {
         // Queue audio samples
         let samples = cpu.bus_mut().apu.take_samples();
         if !samples.is_empty() {
-            audio_queue.queue_audio(&samples).expect("Audio queue failed");
+            audio_queue
+                .queue_audio(&samples)
+                .expect("Audio queue failed");
         }
 
         // Copy frame buffer to SDL texture
@@ -116,7 +124,9 @@ fn main() {
             .expect("Texture update failed");
 
         canvas.clear();
-        canvas.copy(&texture, None, None).expect("Texture copy failed");
+        canvas
+            .copy(&texture, None, None)
+            .expect("Texture copy failed");
         canvas.present();
 
         // Throttle to ~60 FPS

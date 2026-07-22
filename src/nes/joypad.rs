@@ -49,3 +49,22 @@ impl Joypad {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Joypad;
+
+    #[test]
+    fn reads_start_as_fourth_serial_button_bit() {
+        let mut joypad = Joypad::new();
+        joypad.set_button(1 << 3, true);
+
+        joypad.write(1);
+        joypad.write(0);
+
+        assert_eq!(joypad.read(), 0);
+        assert_eq!(joypad.read(), 0);
+        assert_eq!(joypad.read(), 0);
+        assert_eq!(joypad.read(), 1);
+    }
+}

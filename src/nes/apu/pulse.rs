@@ -9,8 +9,8 @@ const DUTY_TABLE: [[f32; 8]; 4] = [
 ];
 
 const LENGTH_TABLE: [u8; 32] = [
-    10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
-    12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30,
+    10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
+    192, 24, 72, 26, 16, 28, 32, 30,
 ];
 
 pub struct Pulse {
@@ -106,7 +106,7 @@ impl Pulse {
     /// $4003/$4007: LLLLL...TTT
     pub fn write_reg3(&mut self, val: u8) {
         self.timer_period = (self.timer_period & 0x0FF) | ((val as u16 & 0x07) << 8);
-        if self.enabled && !self.length_halt {
+        if self.enabled {
             self.length_counter = LENGTH_TABLE[((val >> 3) & 0x1F) as usize];
         }
         self.duty_pos = 0;
@@ -170,7 +170,11 @@ impl Pulse {
 
         self.sweep_mute = self.timer_period < 8 || target > 0x7FF;
 
-        if self.sweep_divider == 0 && self.sweep_enabled && !self.sweep_mute && self.length_counter > 0 {
+        if self.sweep_divider == 0
+            && self.sweep_enabled
+            && !self.sweep_mute
+            && self.length_counter > 0
+        {
             self.timer_period = target;
         }
 
@@ -194,5 +198,22 @@ impl Pulse {
             self.volume_output as f32
         };
         sample * (volume / 15.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Pulse;
+
+    #[test]
+    fn write_timer_high_loads_length_counter_even_when_halted() {
+        let mut pulse = Pulse::new();
+        pulse.set_enabled(true);
+        pulse.write_reg0(0x3f);
+        pulse.write_reg2(0x20);
+        pulse.write_reg3(0x08);
+        pulse.tick();
+
+        assert!(pulse.output() > 0.0);
     }
 }
