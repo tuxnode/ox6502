@@ -97,13 +97,14 @@ impl Ppu {
 
         if self.dot > 340 {
             self.dot = 0;
+
+            if self.scanline < FB_HEIGHT as u16 && self.rendering_enabled() {
+                self.render_scanline(self.scanline as usize);
+            }
+
             self.scanline += 1;
 
             if self.scanline == 241 {
-                if self.rendering_enabled() {
-                    self.render_background();
-                    self.render_sprites();
-                }
                 self.set_vblank();
             }
 
@@ -357,7 +358,42 @@ impl Ppu {
         (self.mask & MASK_SHOW_BG) != 0 || (self.mask & MASK_SHOW_SPR) != 0
     }
 
+    pub fn render_scanline(&mut self, py: usize) {
+        if py >= FB_HEIGHT {
+            return;
+        }
+
+        let mut bg_opaque = [false; FB_WIDTH];
+
+        if (self.mask & MASK_SHOW_BG) != 0 {
+            self.render_background_scanline(py, &mut bg_opaque);
+        } else {
+            self.clear_scanline(py);
+        }
+
+        if (self.mask & MASK_SHOW_SPR) != 0 {
+            self.render_sprite_scanline(py, &bg_opaque);
+        }
+    }
+
+    fn clear_scanline(&mut self, py: usize) {
+        let (r, g, b) = palette::SYSTEM_PALETTE[self.palette[0] as usize];
+        for px in 0..FB_WIDTH {
+            let offset = (py * FB_WIDTH + px) * 3;
+            self.frame_buffer[offset] = r;
+            self.frame_buffer[offset + 1] = g;
+            self.frame_buffer[offset + 2] = b;
+        }
+    }
+
     pub fn render_background(&mut self) {
+        let mut bg_opaque = [false; FB_WIDTH];
+        for py in 0..FB_HEIGHT {
+            self.render_background_scanline(py, &mut bg_opaque);
+        }
+    }
+
+    fn render_background_scanline(&mut self, py: usize, bg_opaque: &mut [bool; FB_WIDTH]) {
         let bank: u16 = if (self.ctrl & CTRL_BG_ADDR) != 0 {
             0x1000
         } else {
@@ -368,56 +404,63 @@ impl Ppu {
         let scroll_y = ((((self.t >> 5) & 0x001F) as usize) * 8) + (((self.t >> 12) & 0x0007) as usize);
         let base_nt = ((self.t >> 10) & 0x03) as usize;
 
-        for py in 0..FB_HEIGHT {
-            let world_y = py + scroll_y;
-            let nt_y = (world_y / 240) & 0x01;
-            let tile_row = (world_y / 8) % 30;
-            let fine_y = world_y % 8;
+        let world_y = py + scroll_y;
+        let nt_y = (world_y / 240) & 0x01;
+        let tile_row = (world_y / 8) % 30;
+        let fine_y = world_y % 8;
 
-            for px in 0..FB_WIDTH {
-                let world_x = px + scroll_x;
-                let nt_x = (world_x / 256) & 0x01;
-                let tile_col = (world_x / 8) % 32;
-                let fine_x = world_x % 8;
-                let nt = base_nt ^ nt_x ^ (nt_y << 1);
+        for (px, opaque) in bg_opaque.iter_mut().enumerate() {
+            let world_x = px + scroll_x;
+            let nt_x = (world_x / 256) & 0x01;
+            let tile_col = (world_x / 8) % 32;
+            let fine_x = world_x % 8;
+            let nt = base_nt ^ nt_x ^ (nt_y << 1);
 
-                let nt_base = 0x2000 + (nt as u16) * 0x0400;
-                let tile_addr_in_nt = nt_base + (tile_row * 32 + tile_col) as u16;
-                let tile_index = self.ppu_read(tile_addr_in_nt) as u16;
+            let nt_base = 0x2000 + (nt as u16) * 0x0400;
+            let tile_addr_in_nt = nt_base + (tile_row * 32 + tile_col) as u16;
+            let tile_index = self.ppu_read(tile_addr_in_nt) as u16;
 
-                let attr_addr = nt_base + 0x03C0 + ((tile_row / 4) * 8 + (tile_col / 4)) as u16;
-                let attr_byte = self.ppu_read(attr_addr);
-                let palette_shift = ((tile_col % 4) / 2) * 2 + ((tile_row % 4) / 2) * 4;
-                let palette_idx = (attr_byte >> palette_shift) & 0x03;
+            let attr_addr = nt_base + 0x03C0 + ((tile_row / 4) * 8 + (tile_col / 4)) as u16;
+            let attr_byte = self.ppu_read(attr_addr);
+            let palette_shift = ((tile_col % 4) / 2) * 2 + ((tile_row % 4) / 2) * 4;
+            let palette_idx = (attr_byte >> palette_shift) & 0x03;
 
-                let pattern_addr = (bank + tile_index * 16) as usize;
-                if pattern_addr + 15 >= self.chr_rom.len() {
-                    continue;
-                }
-
-                let lo_byte = self.chr_rom[pattern_addr + fine_y];
-                let hi_byte = self.chr_rom[pattern_addr + 8 + fine_y];
-                let bit = 7 - fine_x;
-                let lo = (lo_byte >> bit) & 1;
-                let hi = (hi_byte >> bit) & 1;
-                let color_idx = (hi << 1) | lo;
-
-                let palette_entry = if color_idx == 0 {
-                    self.palette[0]
-                } else {
-                    self.palette[(palette_idx as usize) * 4 + color_idx as usize]
-                };
-
-                let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
-                let offset = (py * FB_WIDTH + px) * 3;
-                self.frame_buffer[offset] = r;
-                self.frame_buffer[offset + 1] = g;
-                self.frame_buffer[offset + 2] = b;
+            let pattern_addr = (bank + tile_index * 16) as usize;
+            if pattern_addr + 15 >= self.chr_rom.len() {
+                *opaque = false;
+                continue;
             }
+
+            let lo_byte = self.chr_rom[pattern_addr + fine_y];
+            let hi_byte = self.chr_rom[pattern_addr + 8 + fine_y];
+            let bit = 7 - fine_x;
+            let lo = (lo_byte >> bit) & 1;
+            let hi = (hi_byte >> bit) & 1;
+            let color_idx = (hi << 1) | lo;
+            *opaque = color_idx != 0;
+
+            let palette_entry = if color_idx == 0 {
+                self.palette[0]
+            } else {
+                self.palette[(palette_idx as usize) * 4 + color_idx as usize]
+            };
+
+            let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+            let offset = (py * FB_WIDTH + px) * 3;
+            self.frame_buffer[offset] = r;
+            self.frame_buffer[offset + 1] = g;
+            self.frame_buffer[offset + 2] = b;
         }
     }
 
     pub fn render_sprites(&mut self) {
+        let bg_opaque = [false; FB_WIDTH];
+        for py in 0..FB_HEIGHT {
+            self.render_sprite_scanline(py, &bg_opaque);
+        }
+    }
+
+    fn render_sprite_scanline(&mut self, py: usize, bg_opaque: &[bool; FB_WIDTH]) {
         if (self.mask & MASK_SHOW_SPR) == 0 {
             return;
         }
@@ -430,13 +473,12 @@ impl Ppu {
 
         // Iterate in reverse so sprite 0 (highest priority) draws last
         for i in (0..self.oam.len()).step_by(4).rev() {
-            let y = self.oam[i] as i16;
+            let y = self.oam[i] as i16 + 1;
             let tile_index = self.oam[i + 1] as u16;
             let attr = self.oam[i + 2];
             let x = self.oam[i + 3] as i16;
 
-            // Check visibility: 0 or >= 240 means off-screen (Y-1 is actual top)
-            if !(0..239).contains(&y) {
+            if py < y as usize || py >= (y + 8) as usize {
                 continue;
             }
 
@@ -446,49 +488,46 @@ impl Ppu {
             let priority_behind = (attr & 0x20) != 0;
 
             let tile_addr = (bank + tile_index * 16) as usize;
+            if tile_addr + 15 >= self.chr_rom.len() {
+                continue;
+            }
 
-            for ty in 0..8 {
-                let sy = if flip_v { 7 - ty } else { ty };
-                let lo_byte = self.chr_rom[tile_addr + sy];
-                let hi_byte = self.chr_rom[tile_addr + 8 + sy];
+            let ty = py as i16 - y;
+            let sy = if flip_v { 7 - ty } else { ty } as usize;
+            let lo_byte = self.chr_rom[tile_addr + sy];
+            let hi_byte = self.chr_rom[tile_addr + 8 + sy];
 
-                for tx in 0..8 {
-                    let sx = if flip_h { 7 - tx } else { tx };
-                    let bit = 7 - sx;
-                    let lo = (lo_byte >> bit) & 1;
-                    let hi = (hi_byte >> bit) & 1;
-                    let color_idx = (hi << 1) | lo;
+            for tx in 0..8 {
+                let sx = if flip_h { 7 - tx } else { tx };
+                let bit = 7 - sx;
+                let lo = (lo_byte >> bit) & 1;
+                let hi = (hi_byte >> bit) & 1;
+                let color_idx = (hi << 1) | lo;
 
-                    if color_idx == 0 {
-                        continue; // transparent
-                    }
-
-                    let px = (x + tx as i16) as usize;
-                    let py = (y + ty as i16) as usize;
-
-                    if px >= 256 || py >= 240 {
-                        continue;
-                    }
-
-                    if priority_behind {
-                        // Check if background pixel is non-zero at this position
-                        let bg_offset = (py * 256 + px) * 3;
-                        if bg_offset + 2 < self.frame_buffer.len()
-                            && (self.frame_buffer[bg_offset] != 0
-                                || self.frame_buffer[bg_offset + 1] != 0
-                                || self.frame_buffer[bg_offset + 2] != 0)
-                        {
-                            continue; // sprite behind background
-                        }
-                    }
-
-                    let palette_entry = self.palette[0x11 + palette_idx * 4 + (color_idx - 1) as usize];
-                    let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
-                    let offset = (py * 256 + px) * 3;
-                    self.frame_buffer[offset] = r;
-                    self.frame_buffer[offset + 1] = g;
-                    self.frame_buffer[offset + 2] = b;
+                if color_idx == 0 {
+                    continue; // transparent
                 }
+
+                let px = x + tx as i16;
+                if !(0..FB_WIDTH as i16).contains(&px) {
+                    continue;
+                }
+
+                let px = px as usize;
+                if i == 0 && px != 255 && bg_opaque[px] {
+                    self.status |= STATUS_SPR0_HIT;
+                }
+
+                if priority_behind && bg_opaque[px] {
+                    continue;
+                }
+
+                let palette_entry = self.palette[0x11 + palette_idx * 4 + (color_idx - 1) as usize];
+                let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+                let offset = (py * FB_WIDTH + px) * 3;
+                self.frame_buffer[offset] = r;
+                self.frame_buffer[offset + 1] = g;
+                self.frame_buffer[offset + 2] = b;
             }
         }
     }
@@ -600,5 +639,40 @@ mod tests {
 
         let expected = palette::SYSTEM_PALETTE[0x02];
         assert_eq!(&ppu.frame_buffer()[0..3], &[expected.0, expected.1, expected.2]);
+    }
+
+    #[test]
+    fn tick_renders_visible_scanline_at_end_of_line() {
+        let mut ppu = Ppu::new(vec![0; 0x2000]);
+        set_tile_color(&mut ppu, 0, 1);
+        ppu.ppu_write(0x2000, 0);
+        ppu.ppu_write(0x3F01, 0x01);
+        ppu.write_register(0x2001, MASK_SHOW_BG);
+
+        for _ in 0..341 {
+            ppu.tick();
+        }
+
+        let expected = palette::SYSTEM_PALETTE[0x01];
+        assert_eq!(&ppu.frame_buffer()[0..3], &[expected.0, expected.1, expected.2]);
+        assert_eq!(ppu.scanline(), 1);
+    }
+
+    #[test]
+    fn render_scanline_sets_sprite_zero_hit_on_opaque_overlap() {
+        let mut ppu = Ppu::new(vec![0; 0x2000]);
+        set_tile_color(&mut ppu, 0, 1);
+        ppu.ppu_write(0x2000, 0);
+        ppu.ppu_write(0x3F01, 0x01);
+        ppu.write_register(0x2001, MASK_SHOW_BG | MASK_SHOW_SPR);
+
+        ppu.oam[0] = 0;
+        ppu.oam[1] = 0;
+        ppu.oam[2] = 0;
+        ppu.oam[3] = 0;
+
+        ppu.render_scanline(1);
+
+        assert_ne!(ppu.status & STATUS_SPR0_HIT, 0);
     }
 }
