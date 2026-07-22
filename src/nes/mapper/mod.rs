@@ -15,6 +15,7 @@ pub fn from_cartridge(cart: Cartridge) -> Box<dyn Mapper> {
     match cart.mapper {
         0 => Box::new(Nrom::new(cart.prg_rom, cart.chr_rom, cart.mirroring)),
         1 => Box::new(Mmc1::new(cart.prg_rom, cart.chr_rom, cart.mirroring)),
+        2 => Box::new(Uxrom::new(cart.prg_rom, cart.chr_rom, cart.mirroring, 0)),
         n => panic!("Unsupported mapper: {}", n),
     }
 }

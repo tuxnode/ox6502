@@ -47,7 +47,20 @@ impl Mapper for Uxrom {
         }
     }
 
-    fn ppu_read(&mut self, addr: u16) -> u8 {}
-    fn ppu_write(&mut self, addr: u16, val: u8) {}
-    fn mirroring(&self) -> Mirroring {}
+    fn ppu_read(&mut self, addr: u16) -> u8 {
+        if (addr as usize) < self.chr_ram.len() {
+            self.chr_ram[addr as usize]
+        } else {
+            0
+        }
+    }
+
+    fn ppu_write(&mut self, addr: u16, val: u8) {
+        if (addr as usize) < self.chr_ram.len() {
+            self.chr_ram[addr as usize] = val;
+        }
+    }
+    fn mirroring(&self) -> Mirroring {
+        self.mirroring
+    }
 }
