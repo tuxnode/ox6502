@@ -20,7 +20,7 @@ pub struct NesBus {
     pub joypad1: Joypad,   // Player 1 controller
     joypad2: Joypad,       // Player 2 controller
     mapper: Box<dyn Mapper>,
-    dma_cycles: u32,       // DMA pending cycles (0 = no DMA)
+    dma_cycles: u32, // DMA pending cycles (0 = no DMA)
 }
 
 impl NesBus {
@@ -108,7 +108,11 @@ impl Bus for NesBus {
                 }
                 self.ppu.dma_write_oam(&page_data);
                 // DMA takes 513 cycles if OAMADDR even, 514 if odd
-                self.dma_cycles = if self.ppu.oam_addr.is_multiple_of(2) { 513 } else { 514 };
+                self.dma_cycles = if self.ppu.oam_addr.is_multiple_of(2) {
+                    513
+                } else {
+                    514
+                };
             }
 
             // Joypad strobe ($4016 write)

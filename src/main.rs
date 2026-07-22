@@ -10,9 +10,10 @@ use std::fs;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let debug = args.iter().any(|a| a == "--debug");
-    let test_file = args.get(1).filter(|a| !a.starts_with('-')).or_else(|| {
-        args.iter().skip(1).find(|a| !a.starts_with('-'))
-    });
+    let test_file = args
+        .get(1)
+        .filter(|a| !a.starts_with('-'))
+        .or_else(|| args.iter().skip(1).find(|a| !a.starts_with('-')));
 
     let test_file = match test_file {
         Some(f) => f.clone(),

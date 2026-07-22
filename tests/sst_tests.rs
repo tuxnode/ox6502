@@ -75,13 +75,19 @@ fn run_sst_test(test: &SstTest) -> bool {
 
     // Debug: print first failure details
     let mut failed_check = "";
-    if cpu.a != test.final_state.a { failed_check = "A"; }
-    else if cpu.x != test.final_state.x { failed_check = "X"; }
-    else if cpu.y != test.final_state.y { failed_check = "Y"; }
-    else if cpu.sp != test.final_state.s { failed_check = "SP"; }
-    else if cpu.pc != test.final_state.pc { failed_check = "PC"; }
-    else if cpu.status != test.final_state.p { failed_check = "P"; }
-    else {
+    if cpu.a != test.final_state.a {
+        failed_check = "A";
+    } else if cpu.x != test.final_state.x {
+        failed_check = "X";
+    } else if cpu.y != test.final_state.y {
+        failed_check = "Y";
+    } else if cpu.sp != test.final_state.s {
+        failed_check = "SP";
+    } else if cpu.pc != test.final_state.pc {
+        failed_check = "PC";
+    } else if cpu.status != test.final_state.p {
+        failed_check = "P";
+    } else {
         for ram_entry in &test.final_state.ram {
             let addr = ram_entry[0] as u16;
             let expected_val = ram_entry[1] as u8;
@@ -93,10 +99,19 @@ fn run_sst_test(test: &SstTest) -> bool {
     }
     if !failed_check.is_empty() {
         eprintln!("FAIL({}): name={}", failed_check, test.name);
-        eprintln!("  expected: PC={:#06X} A={:#04X} X={:#04X} Y={:#04X} SP={:#04X} P={:#04X}", 
-            test.final_state.pc, test.final_state.a, test.final_state.x, test.final_state.y, test.final_state.s, test.final_state.p);
-        eprintln!("  actual:   PC={:#06X} A={:#04X} X={:#04X} Y={:#04X} SP={:#04X} P={:#04X}", 
-            cpu.pc, cpu.a, cpu.x, cpu.y, cpu.sp, cpu.status);
+        eprintln!(
+            "  expected: PC={:#06X} A={:#04X} X={:#04X} Y={:#04X} SP={:#04X} P={:#04X}",
+            test.final_state.pc,
+            test.final_state.a,
+            test.final_state.x,
+            test.final_state.y,
+            test.final_state.s,
+            test.final_state.p
+        );
+        eprintln!(
+            "  actual:   PC={:#06X} A={:#04X} X={:#04X} Y={:#04X} SP={:#04X} P={:#04X}",
+            cpu.pc, cpu.a, cpu.x, cpu.y, cpu.sp, cpu.status
+        );
     }
 
     // Check registers
@@ -133,10 +148,10 @@ fn run_sst_test(test: &SstTest) -> bool {
 
 fn run_opcode_tests(opcode_hex: &str) {
     let path = format!("tests/sst_tests/nes6502/v1/{}.json", opcode_hex);
-    let data = fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {}: {}", path, e));
-    let tests: Vec<SstTest> = serde_json::from_str(&data).unwrap_or_else(|e| {
-        panic!("Failed to parse {}: {}", path, e)
-    });
+    let data =
+        fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {}: {}", path, e));
+    let tests: Vec<SstTest> =
+        serde_json::from_str(&data).unwrap_or_else(|e| panic!("Failed to parse {}: {}", path, e));
 
     let mut passed = 0;
     let mut failed = 0;
@@ -150,8 +165,13 @@ fn run_opcode_tests(opcode_hex: &str) {
             if first_failure_detail.is_none() {
                 first_failure_detail = Some(format!(
                     "name={}, init_pc={:04X} init_a={:02X} init_p={:02X} final_pc={:04X} final_a={:02X} final_p={:02X}",
-                    test.name, test.initial.pc, test.initial.a, test.initial.p,
-                    test.final_state.pc, test.final_state.a, test.final_state.p
+                    test.name,
+                    test.initial.pc,
+                    test.initial.a,
+                    test.initial.p,
+                    test.final_state.pc,
+                    test.final_state.a,
+                    test.final_state.p
                 ));
             }
         }

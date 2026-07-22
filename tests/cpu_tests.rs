@@ -116,7 +116,7 @@ fn test_lda_immediate() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$42
     assert_eq!(cpu.a, 0x42);
     assert!(!cpu.get_flag(FLAG_N));
@@ -130,7 +130,7 @@ fn test_lda_immediate_zero() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step();
     assert_eq!(cpu.a, 0x00);
     assert!(!cpu.get_flag(FLAG_N));
@@ -144,7 +144,7 @@ fn test_lda_immediate_negative() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step();
     assert_eq!(cpu.a, 0x80);
     assert!(cpu.get_flag(FLAG_N));
@@ -159,7 +159,7 @@ fn test_lda_zeropage() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step();
     assert_eq!(cpu.a, 0x55);
 }
@@ -172,7 +172,7 @@ fn test_lda_zeropage_x() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$05
     cpu.step(); // LDA $10,X -> $15
     assert_eq!(cpu.a, 0xAA);
@@ -186,7 +186,7 @@ fn test_lda_absolute() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step();
     assert_eq!(cpu.a, 0x77);
 }
@@ -198,7 +198,7 @@ fn test_ldx_immediate() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step();
     assert_eq!(cpu.x, 0xBB);
 }
@@ -210,7 +210,7 @@ fn test_ldy_immediate() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step();
     assert_eq!(cpu.y, 0xCC);
 }
@@ -222,7 +222,7 @@ fn test_sta_zeropage() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$42
     cpu.step(); // STA $10
     assert_eq!(cpu.read(0x0010), 0x42);
@@ -235,7 +235,7 @@ fn test_stx_zeropage() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$55
     cpu.step(); // STX $20
     assert_eq!(cpu.read(0x0020), 0x55);
@@ -248,7 +248,7 @@ fn test_sty_zeropage() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDY #$66
     cpu.step(); // STY $30
     assert_eq!(cpu.read(0x0030), 0x66);
@@ -263,7 +263,7 @@ fn test_stz_zeropage() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // NOP (STZ $40 on CMOS, NOP on NMOS)
     assert_eq!(cpu.read(0x0040), 0xFF); // Memory unchanged
 }
@@ -277,7 +277,7 @@ fn test_pha_pla() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$55
     cpu.step(); // PHA
     cpu.step(); // LDA #$00
@@ -288,16 +288,19 @@ fn test_pha_pla() {
 #[test]
 fn test_php_plp() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        SEC,        // Set carry
-        PHP,        // Push status
-        CLC,        // Clear carry
-        PLP,        // Pull status
-    ], 0x0400);
+    bus.load_program(
+        &[
+            SEC, // Set carry
+            PHP, // Push status
+            CLC, // Clear carry
+            PLP, // Pull status
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // SEC
     cpu.step(); // PHP
     cpu.step(); // CLC
@@ -308,15 +311,11 @@ fn test_php_plp() {
 #[test]
 fn test_pha_pla_flags() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0xFF,
-        PHA,
-        PLA,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0xFF, PHA, PLA], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$FF
     cpu.step(); // PHA
     cpu.step(); // PLA
@@ -328,19 +327,14 @@ fn test_pha_pla_flags() {
 #[test]
 fn test_stack_push_pop_order() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0xAA,
-        PHA,
-        LDA_IMM, 0x55,
-        PHA,
-        PLA,
-        TAX,
-        PLA,
-    ], 0x0400);
+    bus.load_program(
+        &[LDA_IMM, 0xAA, PHA, LDA_IMM, 0x55, PHA, PLA, TAX, PLA],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$AA
     cpu.step(); // PHA
     cpu.step(); // LDA #$55
@@ -357,16 +351,11 @@ fn test_stack_push_pop_order() {
 fn test_phx_plx() {
     // NMOS 6502: PHX/PLX are NOPs
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDX_IMM, 0xBB,
-        PHX,
-        LDX_IMM, 0x00,
-        PLX,
-    ], 0x0400);
+    bus.load_program(&[LDX_IMM, 0xBB, PHX, LDX_IMM, 0x00, PLX], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$BB
     cpu.step(); // PHX (NOP on NMOS)
     cpu.step(); // LDX #$00
@@ -378,16 +367,11 @@ fn test_phx_plx() {
 fn test_phy_ply() {
     // NMOS 6502: PHY/PLY are NOPs
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDY_IMM, 0xCC,
-        PHY,
-        LDY_IMM, 0x00,
-        PLY,
-    ], 0x0400);
+    bus.load_program(&[LDY_IMM, 0xCC, PHY, LDY_IMM, 0x00, PLY], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDY #$CC
     cpu.step(); // PHY (NOP on NMOS)
     cpu.step(); // LDY #$00
@@ -404,7 +388,7 @@ fn test_tax() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$42
     cpu.step(); // TAX
     assert_eq!(cpu.x, 0x42);
@@ -417,7 +401,7 @@ fn test_tay() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$42
     cpu.step(); // TAY
     assert_eq!(cpu.y, 0x42);
@@ -430,7 +414,7 @@ fn test_txa() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$42
     cpu.step(); // TXA
     assert_eq!(cpu.a, 0x42);
@@ -443,7 +427,7 @@ fn test_tya() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDY #$42
     cpu.step(); // TYA
     assert_eq!(cpu.a, 0x42);
@@ -456,7 +440,7 @@ fn test_tsx() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$FF
     cpu.step(); // TXS
     assert_eq!(cpu.sp, 0xFF);
@@ -471,7 +455,7 @@ fn test_txs() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$FD
     cpu.step(); // TXS
     assert_eq!(cpu.sp, 0xFD);
@@ -486,7 +470,7 @@ fn test_cmp_immediate_equal() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$42
     cpu.step(); // CMP #$42
     assert!(cpu.get_flag(FLAG_Z)); // Equal
@@ -501,7 +485,7 @@ fn test_cmp_immediate_less() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$42
     cpu.step(); // CMP #$43
     assert!(!cpu.get_flag(FLAG_Z));
@@ -516,7 +500,7 @@ fn test_cmp_immediate_greater() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$42
     cpu.step(); // CMP #$41
     assert!(!cpu.get_flag(FLAG_Z));
@@ -531,7 +515,7 @@ fn test_cpx_immediate() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$42
     cpu.step(); // CPX #$42
     assert!(cpu.get_flag(FLAG_Z));
@@ -545,7 +529,7 @@ fn test_cpy_immediate() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDY #$42
     cpu.step(); // CPY #$42
     assert!(cpu.get_flag(FLAG_Z));
@@ -557,17 +541,18 @@ fn test_cpy_immediate() {
 #[test]
 fn test_beq_taken() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x00,
-        CMP_IMM, 0x00, // Z=1
-        BEQ, 0x02,     // Branch forward 2 bytes
-        NOP,
-        NOP,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            LDA_IMM, 0x00, CMP_IMM, 0x00, // Z=1
+            BEQ, 0x02, // Branch forward 2 bytes
+            NOP, NOP,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$00
     cpu.step(); // CMP #$00
     cpu.step(); // BEQ +2
@@ -578,17 +563,18 @@ fn test_beq_taken() {
 #[test]
 fn test_beq_not_taken() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x42,
-        CMP_IMM, 0x00, // Z=0
-        BEQ, 0x02,     // Should not branch
-        NOP,
-        NOP,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            LDA_IMM, 0x42, CMP_IMM, 0x00, // Z=0
+            BEQ, 0x02, // Should not branch
+            NOP, NOP,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$42
     cpu.step(); // CMP #$00
     cpu.step(); // BEQ +2
@@ -599,17 +585,18 @@ fn test_beq_not_taken() {
 #[test]
 fn test_bne_taken() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x42,
-        CMP_IMM, 0x00, // Z=0
-        BNE, 0x02,     // Branch forward 2 bytes
-        NOP,
-        NOP,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            LDA_IMM, 0x42, CMP_IMM, 0x00, // Z=0
+            BNE, 0x02, // Branch forward 2 bytes
+            NOP, NOP,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$42
     cpu.step(); // CMP #$00
     cpu.step(); // BNE +2
@@ -619,16 +606,17 @@ fn test_bne_taken() {
 #[test]
 fn test_bmi_taken() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x80, // N=1
-        BMI, 0x02,
-        NOP,
-        NOP,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            LDA_IMM, 0x80, // N=1
+            BMI, 0x02, NOP, NOP,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$80
     cpu.step(); // BMI +2
     assert_eq!(cpu.pc, 0x0406);
@@ -637,16 +625,17 @@ fn test_bmi_taken() {
 #[test]
 fn test_bpl_taken() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x00, // N=0
-        BPL, 0x02,
-        NOP,
-        NOP,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            LDA_IMM, 0x00, // N=0
+            BPL, 0x02, NOP, NOP,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$00
     cpu.step(); // BPL +2
     assert_eq!(cpu.pc, 0x0406);
@@ -655,16 +644,11 @@ fn test_bpl_taken() {
 #[test]
 fn test_bcc_taken() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        CLC,
-        BCC, 0x02,
-        NOP,
-        NOP,
-    ], 0x0400);
+    bus.load_program(&[CLC, BCC, 0x02, NOP, NOP], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // CLC
     cpu.step(); // BCC +2
     assert_eq!(cpu.pc, 0x0405);
@@ -673,16 +657,11 @@ fn test_bcc_taken() {
 #[test]
 fn test_bcs_taken() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        SEC,
-        BCS, 0x02,
-        NOP,
-        NOP,
-    ], 0x0400);
+    bus.load_program(&[SEC, BCS, 0x02, NOP, NOP], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // SEC
     cpu.step(); // BCS +2
     assert_eq!(cpu.pc, 0x0405);
@@ -692,17 +671,17 @@ fn test_bcs_taken() {
 fn test_bra() {
     // NMOS 6502: BRA is a 2-byte NOP (reads operand but does not branch)
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        BRA, 0x04, // NOP on NMOS (reads operand)
-        NOP,
-        NOP,
-        NOP,
-        NOP,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            BRA, 0x04, // NOP on NMOS (reads operand)
+            NOP, NOP, NOP, NOP,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // NOP (reads operand, advances PC by 2)
     assert_eq!(cpu.pc, 0x0402); // PC advances past the 2-byte NOP
 }
@@ -712,16 +691,19 @@ fn test_bra() {
 #[test]
 fn test_jmp_absolute() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        JMP_ABS, 0x50, 0x04, // Jump to $0450
-        NOP,
-        // at $0450:
-    ], 0x0400);
+    bus.load_program(
+        &[
+            JMP_ABS, 0x50, 0x04, // Jump to $0450
+            NOP,
+            // at $0450:
+        ],
+        0x0400,
+    );
     bus.memory[0x0450] = NOP;
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // JMP $0450
     assert_eq!(cpu.pc, 0x0450);
 }
@@ -729,20 +711,23 @@ fn test_jmp_absolute() {
 #[test]
 fn test_jsr_rts() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        JSR, 0x04, 0x04, // JSR $0404
-        NOP,             // $0403: return here
-        RTS,             // $0404
-    ], 0x0400);
+    bus.load_program(
+        &[
+            JSR, 0x04, 0x04, // JSR $0404
+            NOP,  // $0403: return here
+            RTS,  // $0404
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     let sp_before = cpu.sp;
     cpu.step(); // JSR $0404
     assert_eq!(cpu.pc, 0x0404);
     assert_eq!(cpu.sp, sp_before - 2);
-    
+
     cpu.step(); // RTS
     assert_eq!(cpu.pc, 0x0403);
     assert_eq!(cpu.sp, sp_before);
@@ -751,17 +736,19 @@ fn test_jsr_rts() {
 #[test]
 fn test_jsr_pushes_correct_return_address() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        JSR, 0x10, 0x04, // $0400: JSR $0410
-        NOP,             // $0403
-        // at $0410:
-        LDA_IMM, 0x00,
-        RTS,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            JSR, 0x10, 0x04, // $0400: JSR $0410
+            NOP,  // $0403
+            // at $0410:
+            LDA_IMM, 0x00, RTS,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // JSR $0410
     // JSR pushes (PC-1) = $0402 (return addr - 1)
     // Stack: SP=$FC has lo byte, SP=$FD has hi byte
@@ -784,40 +771,43 @@ fn test_jsr_nested() {
     // $040E: LDA #$33 (2 bytes)
     // $0410: RTS (1 byte)
     // $0411: NOP (1 byte)
-    bus.load_program(&[
-        JSR, 0x08, 0x04, // $0400: JSR $0408
-        LDA_IMM, 0x11,   // $0403
-        JMP_ABS, 0x11, 0x04, // $0405: JMP $0411
-        LDA_IMM, 0x22,   // $0408
-        JSR, 0x0E, 0x04, // $040A: JSR $040E
-        RTS,             // $040D
-        LDA_IMM, 0x33,   // $040E
-        RTS,             // $0410
-        NOP,             // $0411
-    ], 0x0400);
+    bus.load_program(
+        &[
+            JSR, 0x08, 0x04, // $0400: JSR $0408
+            LDA_IMM, 0x11, // $0403
+            JMP_ABS, 0x11, 0x04, // $0405: JMP $0411
+            LDA_IMM, 0x22, // $0408
+            JSR, 0x0E, 0x04, // $040A: JSR $040E
+            RTS,  // $040D
+            LDA_IMM, 0x33, // $040E
+            RTS,  // $0410
+            NOP,  // $0411
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // JSR $0408
     assert_eq!(cpu.pc, 0x0408);
-    
+
     cpu.step(); // LDA #$22
     assert_eq!(cpu.a, 0x22);
-    
+
     cpu.step(); // JSR $040E
     assert_eq!(cpu.pc, 0x040E);
-    
+
     cpu.step(); // LDA #$33
     assert_eq!(cpu.a, 0x33);
-    
+
     cpu.step(); // RTS -> $040D + 1 = $040E? No, RTS returns to pushed addr + 1
     // JSR at $040A pushed $040C, RTS returns to $040D
     assert_eq!(cpu.pc, 0x040D);
-    
+
     cpu.step(); // RTS -> returns to $0403
     assert_eq!(cpu.pc, 0x0403);
-    
+
     cpu.step(); // LDA #$11
     assert_eq!(cpu.a, 0x11);
 }
@@ -827,14 +817,11 @@ fn test_jsr_nested() {
 #[test]
 fn test_and_immediate() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0xFF,
-        AND_IMM, 0x0F,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0xFF, AND_IMM, 0x0F], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$FF
     cpu.step(); // AND #$0F
     assert_eq!(cpu.a, 0x0F);
@@ -843,14 +830,11 @@ fn test_and_immediate() {
 #[test]
 fn test_ora_immediate() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0xF0,
-        ORA_IMM, 0x0F,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0xF0, ORA_IMM, 0x0F], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$F0
     cpu.step(); // ORA #$0F
     assert_eq!(cpu.a, 0xFF);
@@ -859,14 +843,11 @@ fn test_ora_immediate() {
 #[test]
 fn test_eor_immediate() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0xFF,
-        EOR_IMM, 0x0F,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0xFF, EOR_IMM, 0x0F], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$FF
     cpu.step(); // EOR #$0F
     assert_eq!(cpu.a, 0xF0);
@@ -875,14 +856,11 @@ fn test_eor_immediate() {
 #[test]
 fn test_bit_immediate() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0xFF,
-        BIT_IMM, 0x80,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0xFF, BIT_IMM, 0x80], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$FF
     cpu.step(); // BIT #$80
     assert!(!cpu.get_flag(FLAG_Z)); // A & $80 != 0
@@ -893,14 +871,11 @@ fn test_bit_immediate() {
 fn test_bit_zeropage() {
     let mut bus = TestBus::new();
     bus.memory[0x10] = 0x80;
-    bus.load_program(&[
-        LDA_IMM, 0xFF,
-        BIT_ZP, 0x10,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0xFF, BIT_ZP, 0x10], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$FF
     cpu.step(); // BIT $10
     assert!(!cpu.get_flag(FLAG_Z));
@@ -912,14 +887,11 @@ fn test_bit_zeropage() {
 #[test]
 fn test_asl_accumulator() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x40,
-        ASL_A,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0x40, ASL_A], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$40
     cpu.step(); // ASL A
     assert_eq!(cpu.a, 0x80);
@@ -930,14 +902,11 @@ fn test_asl_accumulator() {
 #[test]
 fn test_asl_carry() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x80,
-        ASL_A,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0x80, ASL_A], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$80
     cpu.step(); // ASL A
     assert_eq!(cpu.a, 0x00);
@@ -948,14 +917,11 @@ fn test_asl_carry() {
 #[test]
 fn test_lsr_accumulator() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x01,
-        LSR_A,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0x01, LSR_A], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$01
     cpu.step(); // LSR A
     assert_eq!(cpu.a, 0x00);
@@ -966,15 +932,11 @@ fn test_lsr_accumulator() {
 #[test]
 fn test_rol_accumulator() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x80,
-        CLC,
-        ROL_A,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0x80, CLC, ROL_A], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$80
     cpu.step(); // CLC
     cpu.step(); // ROL A
@@ -985,15 +947,11 @@ fn test_rol_accumulator() {
 #[test]
 fn test_ror_accumulator() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x01,
-        CLC,
-        ROR_A,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0x01, CLC, ROR_A], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$01
     cpu.step(); // CLC
     cpu.step(); // ROR A
@@ -1009,7 +967,7 @@ fn test_asl_zeropage() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // ASL $10
     assert_eq!(cpu.read(0x10), 0x80);
 }
@@ -1022,7 +980,7 @@ fn test_lsr_zeropage() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LSR $10
     assert_eq!(cpu.read(0x10), 0x01);
     assert!(cpu.get_flag(FLAG_C));
@@ -1033,14 +991,11 @@ fn test_lsr_zeropage() {
 #[test]
 fn test_inx() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDX_IMM, 0x00,
-        INX,
-    ], 0x0400);
+    bus.load_program(&[LDX_IMM, 0x00, INX], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$00
     cpu.step(); // INX
     assert_eq!(cpu.x, 0x01);
@@ -1049,14 +1004,11 @@ fn test_inx() {
 #[test]
 fn test_inx_zero_to_one() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDX_IMM, 0xFF,
-        INX,
-    ], 0x0400);
+    bus.load_program(&[LDX_IMM, 0xFF, INX], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$FF
     cpu.step(); // INX
     assert_eq!(cpu.x, 0x00);
@@ -1066,14 +1018,11 @@ fn test_inx_zero_to_one() {
 #[test]
 fn test_iny() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDY_IMM, 0x00,
-        INY,
-    ], 0x0400);
+    bus.load_program(&[LDY_IMM, 0x00, INY], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDY #$00
     cpu.step(); // INY
     assert_eq!(cpu.y, 0x01);
@@ -1082,14 +1031,11 @@ fn test_iny() {
 #[test]
 fn test_dex() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDX_IMM, 0x01,
-        DEX,
-    ], 0x0400);
+    bus.load_program(&[LDX_IMM, 0x01, DEX], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$01
     cpu.step(); // DEX
     assert_eq!(cpu.x, 0x00);
@@ -1099,14 +1045,11 @@ fn test_dex() {
 #[test]
 fn test_dey() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDY_IMM, 0x01,
-        DEY,
-    ], 0x0400);
+    bus.load_program(&[LDY_IMM, 0x01, DEY], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDY #$01
     cpu.step(); // DEY
     assert_eq!(cpu.y, 0x00);
@@ -1121,7 +1064,7 @@ fn test_inc_zeropage() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // INC $10
     assert_eq!(cpu.read(0x10), 0x06);
 }
@@ -1134,7 +1077,7 @@ fn test_dec_zeropage() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // DEC $10
     assert_eq!(cpu.read(0x10), 0x04);
 }
@@ -1143,14 +1086,11 @@ fn test_dec_zeropage() {
 fn test_inc_a() {
     // NMOS 6502: INC A is a NOP
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x7F,
-        INC_A,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0x7F, INC_A], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$7F
     cpu.step(); // NOP (INC A on NMOS)
     assert_eq!(cpu.a, 0x7F); // A unchanged by NOP
@@ -1160,14 +1100,11 @@ fn test_inc_a() {
 fn test_dec_a() {
     // NMOS 6502: DEC A is a NOP
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x80,
-        DEC_A,
-    ], 0x0400);
+    bus.load_program(&[LDA_IMM, 0x80, DEC_A], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$80
     cpu.step(); // NOP (DEC A on NMOS)
     assert_eq!(cpu.a, 0x80); // A unchanged by NOP
@@ -1182,7 +1119,7 @@ fn test_clc_sec() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // SEC
     assert!(cpu.get_flag(FLAG_C));
     cpu.step(); // CLC
@@ -1196,7 +1133,7 @@ fn test_sed_cld() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // SED
     assert!(cpu.get_flag(FLAG_D));
     cpu.step(); // CLD
@@ -1210,7 +1147,7 @@ fn test_sei_cli() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // SEI
     assert!(cpu.get_flag(FLAG_I));
     cpu.step(); // CLI
@@ -1224,7 +1161,7 @@ fn test_clv() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.status = FLAG_V;
     cpu.step(); // CLV
     assert!(!cpu.get_flag(FLAG_V));
@@ -1239,7 +1176,7 @@ fn test_nop() {
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     let pc_before = cpu.pc;
     cpu.step(); // NOP
     assert_eq!(cpu.pc, pc_before + 1);
@@ -1250,15 +1187,11 @@ fn test_nop() {
 #[test]
 fn test_adc_immediate_basic() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        CLC,
-        LDA_IMM, 0x01,
-        ADC_IMM, 0x01,
-    ], 0x0400);
+    bus.load_program(&[CLC, LDA_IMM, 0x01, ADC_IMM, 0x01], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // CLC
     cpu.step(); // LDA #$01
     cpu.step(); // ADC #$01
@@ -1269,15 +1202,11 @@ fn test_adc_immediate_basic() {
 #[test]
 fn test_adc_immediate_carry() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        CLC,
-        LDA_IMM, 0xFF,
-        ADC_IMM, 0x01,
-    ], 0x0400);
+    bus.load_program(&[CLC, LDA_IMM, 0xFF, ADC_IMM, 0x01], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // CLC
     cpu.step(); // LDA #$FF
     cpu.step(); // ADC #$01
@@ -1289,15 +1218,11 @@ fn test_adc_immediate_carry() {
 #[test]
 fn test_sbc_immediate_basic() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        SEC,
-        LDA_IMM, 0x05,
-        SBC_IMM, 0x01,
-    ], 0x0400);
+    bus.load_program(&[SEC, LDA_IMM, 0x05, SBC_IMM, 0x01], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // SEC (no borrow)
     cpu.step(); // LDA #$05
     cpu.step(); // SBC #$01
@@ -1308,15 +1233,11 @@ fn test_sbc_immediate_basic() {
 #[test]
 fn test_sbc_immediate_borrow() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        SEC,
-        LDA_IMM, 0x00,
-        SBC_IMM, 0x01,
-    ], 0x0400);
+    bus.load_program(&[SEC, LDA_IMM, 0x00, SBC_IMM, 0x01], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // SEC (no borrow)
     cpu.step(); // LDA #$00
     cpu.step(); // SBC #$01
@@ -1327,15 +1248,11 @@ fn test_sbc_immediate_borrow() {
 #[test]
 fn test_adc_overflow_set() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        CLC,
-        LDA_IMM, 0x7F,
-        ADC_IMM, 0x01,
-    ], 0x0400);
+    bus.load_program(&[CLC, LDA_IMM, 0x7F, ADC_IMM, 0x01], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // CLC
     cpu.step(); // LDA #$7F
     cpu.step(); // ADC #$01
@@ -1347,15 +1264,11 @@ fn test_adc_overflow_set() {
 #[test]
 fn test_adc_overflow_clear() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        CLC,
-        LDA_IMM, 0x80,
-        ADC_IMM, 0x80,
-    ], 0x0400);
+    bus.load_program(&[CLC, LDA_IMM, 0x80, ADC_IMM, 0x80], 0x0400);
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // CLC
     cpu.step(); // LDA #$80
     cpu.step(); // ADC #$80
@@ -1370,16 +1283,17 @@ fn test_adc_overflow_clear() {
 #[test]
 fn test_adc_binary_mode() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        CLC,
-        CLD,        // Binary mode
-        LDA_IMM, 0x10,
-        ADC_IMM, 0x20,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            CLC, CLD, // Binary mode
+            LDA_IMM, 0x10, ADC_IMM, 0x20,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // CLC
     cpu.step(); // CLD
     cpu.step(); // LDA #$10
@@ -1390,16 +1304,17 @@ fn test_adc_binary_mode() {
 #[test]
 fn test_sbc_binary_mode() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        SEC,
-        CLD,        // Binary mode
-        LDA_IMM, 0x30,
-        SBC_IMM, 0x10,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            SEC, CLD, // Binary mode
+            LDA_IMM, 0x30, SBC_IMM, 0x10,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // SEC
     cpu.step(); // CLD
     cpu.step(); // LDA #$30
@@ -1432,17 +1347,16 @@ fn test_sbc_binary_minimal() {
 #[test]
 fn test_lda_sta_roundtrip() {
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDA_IMM, 0x42,
-        STA_ZP, 0x10,
-        LDX_IMM, 0x00,
-        LDA_ZP, 0x10,
-        STX_ZP, 0x10,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            LDA_IMM, 0x42, STA_ZP, 0x10, LDX_IMM, 0x00, LDA_ZP, 0x10, STX_ZP, 0x10,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDA #$42
     cpu.step(); // STA $10
     cpu.step(); // LDX #$00
@@ -1459,16 +1373,17 @@ fn test_branch_loop() {
     // $0402: DEX (1 byte) - loop target
     // $0403: BNE $FD (2 bytes) - $FD = -3 signed, branch back to DEX
     // $0405: NOP (1 byte)
-    bus.load_program(&[
-        LDX_IMM, 0x05,
-        DEX,
-        BNE, 0xFD, // -3 signed, branch back to DEX at $0402
-        NOP,
-    ], 0x0400);
+    bus.load_program(
+        &[
+            LDX_IMM, 0x05, DEX, BNE, 0xFD, // -3 signed, branch back to DEX at $0402
+            NOP,
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
+
     cpu.step(); // LDX #$05
     // Loop until X=0
     loop {
@@ -1487,37 +1402,40 @@ fn test_branch_loop() {
 fn test_stack_push_pop_full() {
     // NMOS 6502: PHX/PLX/PHY/PLY are NOPs, so only PHA/PLA work
     let mut bus = TestBus::new();
-    bus.load_program(&[
-        LDX_IMM, 0xFF,
-        TXS,            // SP = $FF
-        LDA_IMM, 0xAA,
-        PHA,            // Push A ($AA) to $01FF, SP=$FE
-        LDX_IMM, 0xBB,
-        PHX,            // NOP on NMOS
-        LDY_IMM, 0xCC,
-        PHY,            // NOP on NMOS
-        // Pull in reverse order
-        PLA,            // Pull -> A = $AA (only PHA pushed)
-        TAX,            // X = $AA
-        PLA,            // Pull -> (empty, reads garbage)
-        TAY,            // Y = garbage
-        PLA,            // Pull -> (empty)
-    ], 0x0400);
+    bus.load_program(
+        &[
+            LDX_IMM, 0xFF, TXS, // SP = $FF
+            LDA_IMM, 0xAA, PHA, // Push A ($AA) to $01FF, SP=$FE
+            LDX_IMM, 0xBB, PHX, // NOP on NMOS
+            LDY_IMM, 0xCC, PHY, // NOP on NMOS
+            // Pull in reverse order
+            PLA, // Pull -> A = $AA (only PHA pushed)
+            TAX, // X = $AA
+            PLA, // Pull -> (empty, reads garbage)
+            TAY, // Y = garbage
+            PLA, // Pull -> (empty)
+        ],
+        0x0400,
+    );
     bus.memory[0xFFFC] = 0x00;
     bus.memory[0xFFFD] = 0x04;
     let mut cpu = Cpu::new(bus);
-    
-    cpu.step(); cpu.step(); // LDX #$FF, TXS
-    cpu.step(); cpu.step(); // LDA #$AA, PHA
-    cpu.step(); cpu.step(); // LDX #$BB, PHX (NOP)
-    cpu.step(); cpu.step(); // LDY #$CC, PHY (NOP)
-    
+
+    cpu.step();
+    cpu.step(); // LDX #$FF, TXS
+    cpu.step();
+    cpu.step(); // LDA #$AA, PHA
+    cpu.step();
+    cpu.step(); // LDX #$BB, PHX (NOP)
+    cpu.step();
+    cpu.step(); // LDY #$CC, PHY (NOP)
+
     cpu.step(); // PLA -> $AA
     cpu.step(); // TAX
     assert_eq!(cpu.x, 0xAA);
-    
+
     cpu.step(); // PLA -> garbage (PHX didn't push)
     cpu.step(); // TAY
-    
+
     cpu.step(); // PLA
 }

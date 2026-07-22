@@ -369,8 +369,8 @@ impl Ppu {
 
     fn latch_render_scroll(&mut self) {
         self.render_scroll_x = (((self.t & 0x001F) as usize) * 8) + self.x as usize;
-        self.render_scroll_y = ((((self.t >> 5) & 0x001F) as usize) * 8)
-            + (((self.t >> 12) & 0x0007) as usize);
+        self.render_scroll_y =
+            ((((self.t >> 5) & 0x001F) as usize) * 8) + (((self.t >> 12) & 0x0007) as usize);
         self.render_base_nt = ((self.t >> 10) & 0x03) as usize;
     }
 
@@ -749,7 +749,10 @@ mod tests {
         ppu.render_background();
 
         let expected = palette::SYSTEM_PALETTE[0x02];
-        assert_eq!(&ppu.frame_buffer()[0..3], &[expected.0, expected.1, expected.2]);
+        assert_eq!(
+            &ppu.frame_buffer()[0..3],
+            &[expected.0, expected.1, expected.2]
+        );
     }
 
     #[test]
@@ -765,7 +768,10 @@ mod tests {
         }
 
         let expected = palette::SYSTEM_PALETTE[0x01];
-        assert_eq!(&ppu.frame_buffer()[0..3], &[expected.0, expected.1, expected.2]);
+        assert_eq!(
+            &ppu.frame_buffer()[0..3],
+            &[expected.0, expected.1, expected.2]
+        );
         assert_eq!(ppu.scanline(), 1);
     }
 

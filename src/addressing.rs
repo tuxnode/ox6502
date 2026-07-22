@@ -74,5 +74,4 @@ impl<B: Bus> Cpu<B> {
         let addr = base.wrapping_add(self.y as u16);
         (base, addr)
     }
-
 }

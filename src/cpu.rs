@@ -5,7 +5,7 @@
 // - W65C02S Programming Manual：https://www.westerndesigncenter.com/wdc/documentation/w65c02-programming-manual.pdf
 
 use crate::bus::{Bus, TickResult};
-use crate::instructions::{FLAG_C, FLAG_B, FLAG_I, FLAG_N, FLAG_Z};
+use crate::instructions::{FLAG_B, FLAG_C, FLAG_I, FLAG_N, FLAG_Z};
 
 pub struct Cpu<B: Bus> {
     pub a: u8, // Accumulator Register

@@ -33,7 +33,10 @@ fn main() {
         if tick.nmi {
             cpu.handle_nmi();
             completed_frames += 1;
-            eprintln!("Frame {} completed at cycle {}", completed_frames, cpu.cycles);
+            eprintln!(
+                "Frame {} completed at cycle {}",
+                completed_frames, cpu.cycles
+            );
 
             if completed_frames >= max_frames {
                 break;

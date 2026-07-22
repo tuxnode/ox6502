@@ -128,12 +128,8 @@ impl Mmc1 {
         } else {
             // 4KB mode
             match addr {
-                0x0000..=0x0FFF => {
-                    self.chr_bank_0 as usize * 0x1000 + addr as usize
-                }
-                0x1000..=0x1FFF => {
-                    self.chr_bank_1 as usize * 0x1000 + (addr - 0x1000) as usize
-                }
+                0x0000..=0x0FFF => self.chr_bank_0 as usize * 0x1000 + addr as usize,
+                0x1000..=0x1FFF => self.chr_bank_1 as usize * 0x1000 + (addr - 0x1000) as usize,
                 _ => 0,
             }
         }
