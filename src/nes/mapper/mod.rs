@@ -1,6 +1,7 @@
 use crate::nes::cartridge::{Cartridge, Mirroring};
 use crate::nes::mapper::mmc1::Mmc1;
 use crate::nes::mapper::nrom::Nrom;
+use crate::nes::mapper::uxrom::Uxrom;
 
 pub trait Mapper {
     fn cpu_read(&mut self, addr: u16) -> u8;
@@ -20,4 +21,4 @@ pub fn from_cartridge(cart: Cartridge) -> Box<dyn Mapper> {
 
 pub mod mmc1;
 pub mod nrom;
-
+pub mod uxrom;
