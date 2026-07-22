@@ -4,7 +4,7 @@
 // - W65C02S datasheet：https://www.westerndesigncenter.com/wdc/documentation/w65c02s.pdf
 // - W65C02S Programming Manual：https://www.westerndesigncenter.com/wdc/documentation/w65c02-programming-manual.pdf
 
-use crate::bus::Bus;
+use crate::bus::{Bus, TickResult};
 use crate::instructions::{FLAG_C, FLAG_B, FLAG_I, FLAG_N, FLAG_Z};
 
 pub struct Cpu<B: Bus> {
@@ -17,6 +17,9 @@ pub struct Cpu<B: Bus> {
 
     pub cycles: u64,
     bus: B,
+    cycle_sync_enabled: bool,
+    bus_cycles_this_step: u8,
+    pending_tick: TickResult,
 }
 
 impl<B: Bus> Cpu<B> {
@@ -40,6 +43,9 @@ impl<B: Bus> Cpu<B> {
             pc: 0xFFFC, // Reset vector address
             cycles: 0,
             bus,
+            cycle_sync_enabled: false,
+            bus_cycles_this_step: 0,
+            pending_tick: TickResult::default(),
         };
         cpu.pc = cpu.fetch_u16(); // Read reset vector from $FFFC-$FFFD
         cpu.set_flag(FLAG_I, true);
@@ -75,11 +81,51 @@ impl<B: Bus> Cpu<B> {
     }
 
     pub fn read(&mut self, addr: u16) -> u8 {
+        self.tick_bus_access();
         self.bus.cpu_read(addr)
     }
 
     pub(crate) fn write(&mut self, addr: u16, val: u8) {
+        self.tick_bus_access();
         self.bus.cpu_write(addr, val);
+    }
+
+    fn tick_bus_access(&mut self) {
+        if self.cycle_sync_enabled {
+            self.tick_bus_cycles(1);
+        }
+    }
+
+    fn tick_bus_cycles(&mut self, cycles: u8) {
+        if cycles == 0 {
+            return;
+        }
+
+        let tick = self.bus.tick(cycles);
+        self.bus_cycles_this_step = self.bus_cycles_this_step.saturating_add(cycles);
+        self.pending_tick.extra_cycles = self
+            .pending_tick
+            .extra_cycles
+            .saturating_add(tick.extra_cycles);
+        self.pending_tick.nmi |= tick.nmi;
+    }
+
+    /// NES-specific single instruction step with CPU/PPU bus-cycle synchronization.
+    pub fn step_nes(&mut self) -> TickResult {
+        self.cycle_sync_enabled = true;
+        self.bus_cycles_this_step = 0;
+        self.pending_tick = TickResult::default();
+
+        let step_cycles = self.step();
+        self.cycles += step_cycles as u64;
+
+        let remaining_cycles = step_cycles.saturating_sub(self.bus_cycles_this_step);
+        self.tick_bus_cycles(remaining_cycles);
+
+        self.cycle_sync_enabled = false;
+        let tick = std::mem::take(&mut self.pending_tick);
+        self.cycles += tick.extra_cycles as u64;
+        tick
     }
 
     // Basic Instructions Dependences
@@ -103,6 +149,8 @@ impl<B: Bus> Cpu<B> {
 
     /// Handle NMI interrupt (similar to BRK but uses $FFFA-$FFFB vector)
     pub fn handle_nmi(&mut self) {
+        let sync_was_enabled = self.cycle_sync_enabled;
+        self.cycle_sync_enabled = false;
         self.push((self.pc >> 8) as u8);
         self.push(self.pc as u8);
         // NMI pushes status with B=0, unlike BRK which sets B=1
@@ -112,17 +160,13 @@ impl<B: Bus> Cpu<B> {
         let hi = self.read(0xFFFB) as u16;
         self.pc = (hi << 8) | lo;
         self.cycles += 7;
+        self.cycle_sync_enabled = sync_was_enabled;
     }
 
     /// NES-specific run loop with DMA and NMI support
     pub fn run_nes(&mut self) {
         loop {
-            let step_cycles = self.step();
-            self.cycles += step_cycles as u64;
-
-            // Tick bus: get DMA cycles and check NMI
-            let tick = self.bus.tick(step_cycles);
-            self.cycles += tick.extra_cycles as u64;
+            let tick = self.step_nes();
 
             // NMI is non-maskable — I flag does not block it
             if tick.nmi {

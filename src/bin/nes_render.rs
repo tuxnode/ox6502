@@ -2,7 +2,6 @@ use std::fs;
 use std::io::Write;
 
 use ox6502::bus::nes::NesBus;
-use ox6502::bus::Bus;
 use ox6502::cpu::Cpu;
 use ox6502::nes::cartridge;
 
@@ -29,11 +28,7 @@ fn main() {
     let mut completed_frames = 0;
 
     loop {
-        let step_cycles = cpu.step();
-        cpu.cycles += step_cycles as u64;
-
-        let tick = cpu.bus_mut().tick(step_cycles);
-        cpu.cycles += tick.extra_cycles as u64;
+        let tick = cpu.step_nes();
 
         if tick.nmi {
             cpu.handle_nmi();
