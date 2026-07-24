@@ -125,6 +125,39 @@ impl Ppu {
         }
     }
 
+    pub fn tick_mapped<F>(&mut self, read_chr: &mut F)
+    where
+        F: FnMut(u16) -> u8,
+    {
+        self.dot += 1;
+
+        if self.scanline < FB_HEIGHT as u16 && self.rendering_enabled() {
+            if self.dot == 1 {
+                self.latch_render_scroll();
+                self.render_scanline_without_sprite_zero_hit_mapped(
+                    self.scanline as usize,
+                    read_chr,
+                );
+            }
+            self.update_sprite_zero_hit_for_dot_mapped(read_chr);
+        }
+
+        if self.dot > 340 {
+            self.dot = 0;
+            self.scanline += 1;
+
+            if self.scanline == 241 {
+                self.set_vblank();
+            }
+
+            if self.scanline == 262 {
+                self.scanline = 0;
+                self.frame += 1;
+                self.clear_vblank();
+            }
+        }
+    }
+
     /// CPU read from PPU register ($2000-$2007, mirrored)
     pub fn read_register(&mut self, addr: u16) -> u8 {
         match addr & 0x07 {
@@ -163,6 +196,34 @@ impl Ppu {
                 val
             }
 
+            _ => 0,
+        }
+    }
+
+    pub fn read_register_mapped<F>(&mut self, addr: u16, read_chr: &mut F) -> u8
+    where
+        F: FnMut(u16) -> u8,
+    {
+        match addr & 0x07 {
+            0 => self.ctrl,
+            1 => self.mask,
+            2 => {
+                let val = self.status;
+                self.status &= !STATUS_VBLANK;
+                self.w = false;
+                val
+            }
+            3 => self.oam_addr,
+            4 => self.oam[self.oam_addr as usize],
+            5 => 0,
+            6 => 0,
+            7 => {
+                let addr = self.v;
+                let val = self.read_buffer;
+                self.read_buffer = self.ppu_read_mapped(addr, read_chr);
+                self.increment_vram_addr();
+                val
+            }
             _ => 0,
         }
     }
@@ -245,6 +306,60 @@ impl Ppu {
         }
     }
 
+    pub fn write_register_mapped<F>(&mut self, addr: u16, val: u8, write_chr: &mut F)
+    where
+        F: FnMut(u16, u8),
+    {
+        match addr & 0x07 {
+            0 => {
+                let old_nmi = self.ctrl & CTRL_NMI_ENABLE;
+                self.ctrl = val;
+                self.t = (self.t & 0xF3FF) | ((val as u16 & 0x03) << 10);
+                if old_nmi == 0
+                    && (val & CTRL_NMI_ENABLE) != 0
+                    && (self.status & STATUS_VBLANK) != 0
+                {
+                    self.nmi_pending = true;
+                }
+            }
+            1 => self.mask = val,
+            2 => {}
+            3 => self.oam_addr = val,
+            4 => {
+                self.oam[self.oam_addr as usize] = val;
+                self.oam_addr = self.oam_addr.wrapping_add(1);
+            }
+            5 => {
+                if !self.w {
+                    self.t = (self.t & 0xFFE0) | (((val as u16) >> 3) & 0x1F);
+                    self.x = val & 0x07;
+                    self.w = true;
+                } else {
+                    self.t = (self.t & 0x0C1F)
+                        | ((val as u16 & 0x07) << 12)
+                        | ((val as u16 & 0xF8) << 2);
+                    self.w = false;
+                }
+            }
+            6 => {
+                if !self.w {
+                    self.t = (self.t & 0x00FF) | ((val as u16 & 0x3F) << 8);
+                    self.w = true;
+                } else {
+                    self.t = (self.t & 0xFF00) | (val as u16);
+                    self.v = self.t;
+                    self.w = false;
+                }
+            }
+            7 => {
+                let addr = self.v;
+                self.ppu_write_mapped(addr, val, write_chr);
+                self.increment_vram_addr();
+            }
+            _ => {}
+        }
+    }
+
     /// 设置 vblank 标志（由 PPU 扫描线逻辑调用）
     pub fn set_vblank(&mut self) {
         self.status |= STATUS_VBLANK;
@@ -308,6 +423,31 @@ impl Ppu {
         }
     }
 
+    fn ppu_read_mapped<F>(&self, addr: u16, read_chr: &mut F) -> u8
+    where
+        F: FnMut(u16) -> u8,
+    {
+        match addr {
+            0x0000..=0x1FFF => read_chr(addr),
+            0x2000..=0x2FFF => {
+                let idx = self.mirror_nt_addr(addr);
+                self.vram[idx]
+            }
+            0x3000..=0x3EFF => {
+                let idx = self.mirror_nt_addr(addr - 0x1000);
+                self.vram[idx]
+            }
+            0x3F00..=0x3FFF => {
+                let mut index = (addr & 0x1F) as usize;
+                if index >= 0x10 && index.is_multiple_of(4) {
+                    index -= 0x10;
+                }
+                self.palette[index]
+            }
+            _ => 0,
+        }
+    }
+
     /// Write byte to PPU address space
     pub fn ppu_write(&mut self, addr: u16, val: u8) {
         match addr {
@@ -339,6 +479,31 @@ impl Ppu {
                 self.palette[index] = val;
             }
 
+            _ => {}
+        }
+    }
+
+    fn ppu_write_mapped<F>(&mut self, addr: u16, val: u8, write_chr: &mut F)
+    where
+        F: FnMut(u16, u8),
+    {
+        match addr {
+            0x0000..=0x1FFF => write_chr(addr, val),
+            0x2000..=0x2FFF => {
+                let idx = self.mirror_nt_addr(addr);
+                self.vram[idx] = val;
+            }
+            0x3000..=0x3EFF => {
+                let idx = self.mirror_nt_addr(addr - 0x1000);
+                self.vram[idx] = val;
+            }
+            0x3F00..=0x3FFF => {
+                let mut index = (addr & 0x1F) as usize;
+                if index >= 0x10 && index.is_multiple_of(4) {
+                    index -= 0x10;
+                }
+                self.palette[index] = val;
+            }
             _ => {}
         }
     }
@@ -383,6 +548,13 @@ impl Ppu {
         self.render_scanline_inner(py, false);
     }
 
+    fn render_scanline_without_sprite_zero_hit_mapped<F>(&mut self, py: usize, read_chr: &mut F)
+    where
+        F: FnMut(u16) -> u8,
+    {
+        self.render_scanline_inner_mapped(py, false, read_chr);
+    }
+
     fn render_scanline_inner(&mut self, py: usize, update_sprite_zero_hit: bool) {
         if py >= FB_HEIGHT {
             return;
@@ -398,6 +570,31 @@ impl Ppu {
 
         if (self.mask & MASK_SHOW_SPR) != 0 {
             self.render_sprite_scanline(py, &bg_opaque, update_sprite_zero_hit);
+        }
+    }
+
+    fn render_scanline_inner_mapped<F>(
+        &mut self,
+        py: usize,
+        update_sprite_zero_hit: bool,
+        read_chr: &mut F,
+    ) where
+        F: FnMut(u16) -> u8,
+    {
+        if py >= FB_HEIGHT {
+            return;
+        }
+
+        let mut bg_opaque = [false; FB_WIDTH];
+
+        if (self.mask & MASK_SHOW_BG) != 0 {
+            self.render_background_scanline_mapped(py, &mut bg_opaque, read_chr);
+        } else {
+            self.clear_scanline(py);
+        }
+
+        if (self.mask & MASK_SHOW_SPR) != 0 {
+            self.render_sprite_scanline_mapped(py, &bg_opaque, update_sprite_zero_hit, read_chr);
         }
     }
 
@@ -427,6 +624,33 @@ impl Ppu {
                 self.render_scroll_x,
                 self.render_scroll_y,
                 self.render_base_nt,
+            );
+            *opaque = is_opaque;
+
+            let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+            let offset = (py * FB_WIDTH + px) * 3;
+            self.frame_buffer[offset] = r;
+            self.frame_buffer[offset + 1] = g;
+            self.frame_buffer[offset + 2] = b;
+        }
+    }
+
+    fn render_background_scanline_mapped<F>(
+        &mut self,
+        py: usize,
+        bg_opaque: &mut [bool; FB_WIDTH],
+        read_chr: &mut F,
+    ) where
+        F: FnMut(u16) -> u8,
+    {
+        for (px, opaque) in bg_opaque.iter_mut().enumerate() {
+            let (palette_entry, is_opaque) = self.background_pixel_mapped(
+                px,
+                py,
+                self.render_scroll_x,
+                self.render_scroll_y,
+                self.render_base_nt,
+                read_chr,
             );
             *opaque = is_opaque;
 
@@ -478,6 +702,59 @@ impl Ppu {
 
         let lo_byte = self.chr_rom[pattern_addr + fine_y];
         let hi_byte = self.chr_rom[pattern_addr + 8 + fine_y];
+        let bit = 7 - fine_x;
+        let lo = (lo_byte >> bit) & 1;
+        let hi = (hi_byte >> bit) & 1;
+        let color_idx = (hi << 1) | lo;
+        let palette_entry = if color_idx == 0 {
+            self.palette[0]
+        } else {
+            self.palette[(palette_idx as usize) * 4 + color_idx as usize]
+        };
+
+        (palette_entry, color_idx != 0)
+    }
+
+    fn background_pixel_mapped<F>(
+        &self,
+        px: usize,
+        py: usize,
+        scroll_x: usize,
+        scroll_y: usize,
+        base_nt: usize,
+        read_chr: &mut F,
+    ) -> (u8, bool)
+    where
+        F: FnMut(u16) -> u8,
+    {
+        let world_y = py + scroll_y;
+        let nt_y = (world_y / 240) & 0x01;
+        let tile_row = (world_y / 8) % 30;
+        let fine_y = world_y % 8;
+
+        let world_x = px + scroll_x;
+        let nt_x = (world_x / 256) & 0x01;
+        let tile_col = (world_x / 8) % 32;
+        let fine_x = world_x % 8;
+        let nt = base_nt ^ nt_x ^ (nt_y << 1);
+
+        let nt_base = 0x2000 + (nt as u16) * 0x0400;
+        let tile_addr_in_nt = nt_base + (tile_row * 32 + tile_col) as u16;
+        let tile_index = self.ppu_read_mapped(tile_addr_in_nt, read_chr) as u16;
+
+        let attr_addr = nt_base + 0x03C0 + ((tile_row / 4) * 8 + (tile_col / 4)) as u16;
+        let attr_byte = self.ppu_read_mapped(attr_addr, read_chr);
+        let palette_shift = ((tile_col % 4) / 2) * 2 + ((tile_row % 4) / 2) * 4;
+        let palette_idx = (attr_byte >> palette_shift) & 0x03;
+
+        let bank: u16 = if (self.ctrl & CTRL_BG_ADDR) != 0 {
+            0x1000
+        } else {
+            0x0000
+        };
+        let pattern_addr = bank + tile_index * 16;
+        let lo_byte = read_chr(pattern_addr + fine_y as u16);
+        let hi_byte = read_chr(pattern_addr + 8 + fine_y as u16);
         let bit = 7 - fine_x;
         let lo = (lo_byte >> bit) & 1;
         let hi = (hi_byte >> bit) & 1;
@@ -575,6 +852,81 @@ impl Ppu {
         }
     }
 
+    fn render_sprite_scanline_mapped<F>(
+        &mut self,
+        py: usize,
+        bg_opaque: &[bool; FB_WIDTH],
+        update_sprite_zero_hit: bool,
+        read_chr: &mut F,
+    ) where
+        F: FnMut(u16) -> u8,
+    {
+        if (self.mask & MASK_SHOW_SPR) == 0 {
+            return;
+        }
+
+        let bank: u16 = if (self.ctrl & CTRL_SPR_ADDR) != 0 {
+            0x1000
+        } else {
+            0x0000
+        };
+
+        for i in (0..self.oam.len()).step_by(4).rev() {
+            let y = self.oam[i] as i16 + 1;
+            let tile_index = self.oam[i + 1] as u16;
+            let attr = self.oam[i + 2];
+            let x = self.oam[i + 3] as i16;
+
+            if py < y as usize || py >= (y + 8) as usize {
+                continue;
+            }
+
+            let flip_h = (attr & 0x40) != 0;
+            let flip_v = (attr & 0x80) != 0;
+            let palette_idx = (attr & 0x03) as usize;
+            let priority_behind = (attr & 0x20) != 0;
+
+            let tile_addr = bank + tile_index * 16;
+            let ty = py as i16 - y;
+            let sy = if flip_v { 7 - ty } else { ty } as u16;
+            let lo_byte = read_chr(tile_addr + sy);
+            let hi_byte = read_chr(tile_addr + 8 + sy);
+
+            for tx in 0..8 {
+                let sx = if flip_h { 7 - tx } else { tx };
+                let bit = 7 - sx;
+                let lo = (lo_byte >> bit) & 1;
+                let hi = (hi_byte >> bit) & 1;
+                let color_idx = (hi << 1) | lo;
+
+                if color_idx == 0 {
+                    continue;
+                }
+
+                let px = x + tx as i16;
+                if !(0..FB_WIDTH as i16).contains(&px) {
+                    continue;
+                }
+
+                let px = px as usize;
+                if update_sprite_zero_hit && i == 0 && px != 255 && bg_opaque[px] {
+                    self.status |= STATUS_SPR0_HIT;
+                }
+
+                if priority_behind && bg_opaque[px] {
+                    continue;
+                }
+
+                let palette_entry = self.palette[0x11 + palette_idx * 4 + (color_idx - 1) as usize];
+                let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+                let offset = (py * FB_WIDTH + px) * 3;
+                self.frame_buffer[offset] = r;
+                self.frame_buffer[offset + 1] = g;
+                self.frame_buffer[offset + 2] = b;
+            }
+        }
+    }
+
     fn update_sprite_zero_hit_for_dot(&mut self) {
         if (self.status & STATUS_SPR0_HIT) != 0 {
             return;
@@ -604,6 +956,43 @@ impl Ppu {
         }
 
         if self.sprite_zero_opaque_at(px, py) {
+            self.status |= STATUS_SPR0_HIT;
+        }
+    }
+
+    fn update_sprite_zero_hit_for_dot_mapped<F>(&mut self, read_chr: &mut F)
+    where
+        F: FnMut(u16) -> u8,
+    {
+        if (self.status & STATUS_SPR0_HIT) != 0 {
+            return;
+        }
+        if (self.mask & (MASK_SHOW_BG | MASK_SHOW_SPR)) != (MASK_SHOW_BG | MASK_SHOW_SPR) {
+            return;
+        }
+        if self.scanline >= FB_HEIGHT as u16 || self.dot == 0 || self.dot > FB_WIDTH as u16 {
+            return;
+        }
+
+        let px = (self.dot - 1) as usize;
+        if px == 255 {
+            return;
+        }
+
+        let py = self.scanline as usize;
+        let (_, bg_opaque) = self.background_pixel_mapped(
+            px,
+            py,
+            self.render_scroll_x,
+            self.render_scroll_y,
+            self.render_base_nt,
+            read_chr,
+        );
+        if !bg_opaque {
+            return;
+        }
+
+        if self.sprite_zero_opaque_at_mapped(px, py, read_chr) {
             self.status |= STATUS_SPR0_HIT;
         }
     }
@@ -639,6 +1028,41 @@ impl Ppu {
         let bit = 7 - sx;
         let lo = (self.chr_rom[tile_addr + sy] >> bit) & 1;
         let hi = (self.chr_rom[tile_addr + 8 + sy] >> bit) & 1;
+
+        ((hi << 1) | lo) != 0
+    }
+
+    fn sprite_zero_opaque_at_mapped<F>(&self, px: usize, py: usize, read_chr: &mut F) -> bool
+    where
+        F: FnMut(u16) -> u8,
+    {
+        let y = self.oam[0] as i16 + 1;
+        if py < y as usize || py >= (y + 8) as usize {
+            return false;
+        }
+
+        let x = self.oam[3] as i16;
+        if px < x as usize || px >= (x + 8) as usize {
+            return false;
+        }
+
+        let bank: u16 = if (self.ctrl & CTRL_SPR_ADDR) != 0 {
+            0x1000
+        } else {
+            0x0000
+        };
+        let tile_addr = bank + self.oam[1] as u16 * 16;
+
+        let attr = self.oam[2];
+        let flip_h = (attr & 0x40) != 0;
+        let flip_v = (attr & 0x80) != 0;
+        let tx = px as i16 - x;
+        let ty = py as i16 - y;
+        let sx = if flip_h { 7 - tx } else { tx } as u16;
+        let sy = if flip_v { 7 - ty } else { ty } as u16;
+        let bit = 7 - sx;
+        let lo = (read_chr(tile_addr + sy) >> bit) & 1;
+        let hi = (read_chr(tile_addr + 8 + sy) >> bit) & 1;
 
         ((hi << 1) | lo) != 0
     }

@@ -52,8 +52,10 @@ impl NesBus {
 
     /// Advance PPU by the given number of CPU cycles (1 CPU cycle = 3 PPU dots)
     pub fn tick_ppu(&mut self, cpu_cycles: u8) {
+        let ppu = &mut self.ppu;
+        let mapper = &mut self.mapper;
         for _ in 0..(cpu_cycles * 3) {
-            self.ppu.tick();
+            ppu.tick_mapped(&mut |addr| mapper.ppu_read(addr));
         }
     }
 }
@@ -65,7 +67,11 @@ impl Bus for NesBus {
             0x0000..=0x1FFF => self.ram[(addr & 0x07FF) as usize],
 
             // PPU registers: 8 bytes, mirrored every 8 bytes up to $3FFF
-            0x2000..=0x3FFF => self.ppu.read_register(addr),
+            0x2000..=0x3FFF => {
+                let mapper = &mut self.mapper;
+                self.ppu
+                    .read_register_mapped(addr, &mut |ppu_addr| mapper.ppu_read(ppu_addr))
+            }
 
             // Joypad 1 ($4016)
             0x4016 => self.joypad1.read(),
@@ -95,7 +101,11 @@ impl Bus for NesBus {
 
             // PPU registers
             0x2000..=0x3FFF => {
-                self.ppu.write_register(addr, val);
+                let mapper = &mut self.mapper;
+                self.ppu
+                    .write_register_mapped(addr, val, &mut |ppu_addr, ppu_val| {
+                        mapper.ppu_write(ppu_addr, ppu_val);
+                    });
             }
 
             // OAM DMA: writing page number triggers 256-byte copy
@@ -188,5 +198,51 @@ impl Bus for NesBus {
             extra_cycles: self.take_dma_cycles(),
             nmi,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::nes::{
+        cartridge::{Cartridge, Mirroring},
+        palette,
+    };
+
+    fn uxrom_chr_ram_cartridge() -> Cartridge {
+        Cartridge {
+            mapper: 2,
+            mirroring: Mirroring::Horizontal,
+            battery: false,
+            trainer: false,
+            prg_rom: vec![0; 0x8000],
+            chr_rom: vec![0; 0x2000],
+        }
+    }
+
+    #[test]
+    fn ppu_render_reads_chr_through_mapper() {
+        let mut bus = NesBus::new(uxrom_chr_ram_cartridge());
+
+        bus.cpu_write(0x2006, 0x00);
+        bus.cpu_write(0x2006, 0x00);
+        for _ in 0..8 {
+            bus.cpu_write(0x2007, 0xFF);
+        }
+
+        bus.cpu_write(0x2006, 0x3F);
+        bus.cpu_write(0x2006, 0x01);
+        bus.cpu_write(0x2007, 0x01);
+        bus.cpu_write(0x2001, 0x08);
+
+        for _ in 0..114 {
+            bus.tick_ppu(1);
+        }
+
+        let expected = palette::SYSTEM_PALETTE[0x01];
+        assert_eq!(
+            &bus.ppu.frame_buffer()[0..3],
+            &[expected.0, expected.1, expected.2]
+        );
     }
 }
