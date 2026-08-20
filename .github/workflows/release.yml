@@ -49,7 +49,7 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
       - name: Build release
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} --bin ox6502 --bin nes_render
 
       - name: Determine binary name
         id: bin
@@ -69,7 +69,8 @@ jobs:
           STAGING="${BINARY}-${TAG}-${{ matrix.target }}"
 
           mkdir "${STAGING}"
-          cp "target/${{ matrix.target }}/release/${BINARY}" "${STAGING}/"
+          cp "target/${{ matrix.target }}/release/ox6502" "${STAGING}/"
+          cp "target/${{ matrix.target }}/release/nes_render" "${STAGING}/"
           cp README.md LICENSE* "${STAGING}/" 2>/dev/null || true
 
           tar czf "${STAGING}.tar.gz" "${STAGING}"
@@ -84,7 +85,8 @@ jobs:
           STAGING="${BINARY}-${TAG}-${{ matrix.target }}"
 
           mkdir "${STAGING}"
-          cp "target/${{ matrix.target }}/release/${BINARY}.exe" "${STAGING}/"
+          cp "target/${{ matrix.target }}/release/ox6502.exe" "${STAGING}/"
+          cp "target/${{ matrix.target }}/release/nes_render.exe" "${STAGING}/"
           cp README.md LICENSE* "${STAGING}/" 2>/dev/null || true
 
           7z a "${STAGING}.zip" "${STAGING}"
