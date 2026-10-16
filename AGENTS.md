@@ -14,7 +14,13 @@ cargo run --bin nes_sdl -- <game.nes>            # NES real-time display (SDL2)
 cargo run --bin nes_render -- <game.nes>         # NES offline frame → PPM
 ```
 
-No dev-dependencies, no formatter/linter config, no CI. Just `cargo build` and `cargo test`.
+No dev-dependencies, no formatter/linter config. CI (`.github/workflows/ci.yml`) runs on every push and pull request: `cargo fmt --check`, `cargo check --all-targets`, and the project's own tests. To reproduce locally:
+
+```bash
+cargo fmt --all -- --check
+cargo check --all-targets
+cargo test --lib --test cpu_tests   # excludes the SST tests, which need the ProcessorTests submodule
+```
 
 Dependencies:
 - `serde` + `serde_json` — SST JSON test deserialization in `tests/sst_tests.rs`
