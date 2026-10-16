@@ -3,7 +3,6 @@ use crate::nes::{cartridge::Mirroring, mapper::Mapper};
 /**
  * Reference: https://www.nesdev.org/wiki/CNROM
  */
-
 pub struct Cnrom {
     prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,
@@ -58,16 +57,16 @@ mod tests {
 
     fn prg_rom_16kb() -> Vec<u8> {
         let mut prg = vec![0; 0x4000];
-        for i in 0..0x4000 {
-            prg[i] = (i >> 8) as u8;
+        for (i, byte) in prg.iter_mut().enumerate() {
+            *byte = (i >> 8) as u8;
         }
         prg
     }
 
     fn prg_rom_32kb() -> Vec<u8> {
         let mut prg = vec![0; 0x8000];
-        for i in 0..0x8000 {
-            prg[i] = (i >> 8) as u8;
+        for (i, byte) in prg.iter_mut().enumerate() {
+            *byte = (i >> 8) as u8;
         }
         prg
     }

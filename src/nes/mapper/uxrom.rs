@@ -3,7 +3,6 @@ use crate::nes::{cartridge::Mirroring, mapper::Mapper};
 /**
  * Reference: https://www.nesdev.org/wiki/UxROM
  */
-
 pub struct Uxrom {
     prg_rom: Vec<u8>,
     chr_ram: Vec<u8>,
