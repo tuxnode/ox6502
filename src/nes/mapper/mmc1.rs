@@ -121,10 +121,9 @@ impl Mmc1 {
     fn chr_addr(&self, addr: u16) -> usize {
         let chr_mode = (self.control >> 4) & 1;
         if chr_mode == 0 {
-            // 8KB mode
-            let bank = (self.chr_bank_0 >> 1) & 0xFE;
-            let bank = bank as usize;
-            bank * 0x1000 + addr as usize
+            // 8KB mode: the bank number is bits 1-4 (bit 0 is ignored)
+            let bank = (self.chr_bank_0 >> 1) as usize;
+            bank * 0x2000 + addr as usize
         } else {
             // 4KB mode
             match addr {
@@ -361,6 +360,27 @@ mod tests {
         load_register(&mut mapper, 0xA000, 1); // bit 0 ignored -> 8KB bank 0
 
         assert_eq!(mapper.ppu_read(0x0000), 0xA0);
+    }
+
+    #[test]
+    fn chr_8kb_mode_selects_bank_from_bits_one_to_four() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_32kb(), Mirroring::Horizontal);
+
+        // Bits 1-4 select the 8KB bank, so register value 4 maps to bank 2 ($4000-$5FFF).
+        load_register(&mut mapper, 0xA000, 4);
+
+        assert_eq!(mapper.ppu_read(0x0000), 0xA4);
+        assert_eq!(mapper.ppu_read(0x1FFF), 0xA5);
+    }
+
+    #[test]
+    fn chr_8kb_read_past_end_of_rom_returns_zero() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_32kb(), Mirroring::Horizontal);
+
+        // 8KB bank 4 starts at $8000, past the end of the 32KB CHR ROM.
+        load_register(&mut mapper, 0xA000, 8);
+
+        assert_eq!(mapper.ppu_read(0x0000), 0);
     }
 
     #[test]
