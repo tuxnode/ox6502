@@ -187,3 +187,216 @@ impl Mapper for Mmc1 {
         self.mirroring
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Loads a 5-bit value into an MMC1 register using the serial protocol
+    /// (least-significant bit first, five writes to the same register address).
+    fn load_register(mapper: &mut Mmc1, addr: u16, value: u8) {
+        for bit in 0..5 {
+            mapper.cpu_write(addr, (value >> bit) & 1);
+        }
+    }
+
+    fn prg_rom_with_banks(bank_count: usize) -> Vec<u8> {
+        let mut prg_rom = vec![0; bank_count * 0x4000];
+        for bank in 0..bank_count {
+            for offset in 0..0x4000 {
+                prg_rom[bank * 0x4000 + offset] = bank as u8;
+            }
+        }
+        prg_rom
+    }
+
+    fn chr_rom_8kb() -> Vec<u8> {
+        vec![0; 0x2000]
+    }
+
+    fn chr_rom_32kb() -> Vec<u8> {
+        let mut chr = vec![0; 0x8000];
+        for bank in 0..8 {
+            for offset in 0..0x1000 {
+                chr[bank * 0x1000 + offset] = 0xA0 + bank as u8;
+            }
+        }
+        chr
+    }
+
+    #[test]
+    fn mirroring_defaults_to_cartridge_mirroring() {
+        let mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_8kb(), Mirroring::Vertical);
+
+        assert_eq!(mapper.mirroring(), Mirroring::Vertical);
+    }
+
+    #[test]
+    fn control_register_selects_mirroring() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_8kb(), Mirroring::Horizontal);
+
+        for (value, expected) in [
+            (0, Mirroring::OneScreenA),
+            (1, Mirroring::OneScreenB),
+            (2, Mirroring::Vertical),
+            (3, Mirroring::Horizontal),
+        ] {
+            load_register(&mut mapper, 0x8000, value);
+            assert_eq!(mapper.mirroring(), expected, "control value {}", value);
+        }
+    }
+
+    #[test]
+    fn register_selected_by_address_high_bits() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_8kb(), Mirroring::Vertical);
+
+        // Any address in $8000-$9FFF targets the control register.
+        load_register(&mut mapper, 0x9FFF, 0x03);
+
+        assert_eq!(mapper.mirroring(), Mirroring::Horizontal);
+    }
+
+    #[test]
+    fn bit_seven_resets_the_shift_register() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(4), chr_rom_8kb(), Mirroring::Horizontal);
+
+        // Start a partial load ...
+        mapper.cpu_write(0xE000, 1);
+        mapper.cpu_write(0xE000, 1);
+        // ... discard it by writing bit 7 ...
+        mapper.cpu_write(0xE000, 0x80);
+        // ... then load a full value selecting bank 2.
+        load_register(&mut mapper, 0xE000, 2);
+
+        // Default control selects a switchable bank at $8000.
+        assert_eq!(mapper.cpu_read(0x8000), 2);
+    }
+
+    #[test]
+    fn prg_bank_masks_to_low_four_bits() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(4), chr_rom_8kb(), Mirroring::Horizontal);
+
+        load_register(&mut mapper, 0xE000, 0x1F); // only the low 4 bits are kept -> 0x0F
+
+        // Default control: switchable $8000; 15 % 4 banks == 3.
+        assert_eq!(mapper.cpu_read(0x8000), 3);
+    }
+
+    #[test]
+    fn switchable_bank_wraps_modulo_prg_size() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(4), chr_rom_8kb(), Mirroring::Horizontal);
+
+        load_register(&mut mapper, 0xE000, 5); // 5 % 4 banks == 1
+
+        assert_eq!(mapper.cpu_read(0x8000), 1);
+    }
+
+    #[test]
+    fn prg_16kb_mode_fixes_last_bank_at_c000() {
+        // Default control: 16KB mode, switchable at $8000, $C000 fixed to last bank.
+        let mut mapper = Mmc1::new(prg_rom_with_banks(4), chr_rom_8kb(), Mirroring::Horizontal);
+
+        load_register(&mut mapper, 0xE000, 2);
+
+        assert_eq!(mapper.cpu_read(0x8000), 2);
+        assert_eq!(mapper.cpu_read(0xBFFF), 2);
+        assert_eq!(mapper.cpu_read(0xC000), 3);
+        assert_eq!(mapper.cpu_read(0xFFFF), 3);
+    }
+
+    #[test]
+    fn prg_16kb_mode_fixes_first_bank_at_8000() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(4), chr_rom_8kb(), Mirroring::Horizontal);
+
+        // 16KB mode with the fixed bank at $8000 and a switchable bank at $C000.
+        load_register(&mut mapper, 0x8000, 0x04);
+        load_register(&mut mapper, 0xE000, 2);
+
+        assert_eq!(mapper.cpu_read(0x8000), 0);
+        assert_eq!(mapper.cpu_read(0xC000), 2);
+    }
+
+    #[test]
+    fn prg_32kb_mode_selects_consecutive_banks() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(4), chr_rom_8kb(), Mirroring::Horizontal);
+
+        load_register(&mut mapper, 0x8000, 0x00); // 32KB mode
+        load_register(&mut mapper, 0xE000, 4);
+
+        // The low bit of the bank number is OR'd in for the $C000 half.
+        assert_eq!(mapper.cpu_read(0x8000), 2);
+        assert_eq!(mapper.cpu_read(0xC000), 3);
+    }
+
+    #[test]
+    fn chr_4kb_mode_selects_banks_independently() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_32kb(), Mirroring::Horizontal);
+
+        load_register(&mut mapper, 0x8000, 0x10); // CHR 4KB mode
+        load_register(&mut mapper, 0xA000, 3); // bank for $0000-$0FFF
+        load_register(&mut mapper, 0xC000, 5); // bank for $1000-$1FFF
+
+        assert_eq!(mapper.ppu_read(0x0000), 0xA3);
+        assert_eq!(mapper.ppu_read(0x0FFF), 0xA3);
+        assert_eq!(mapper.ppu_read(0x1000), 0xA5);
+        assert_eq!(mapper.ppu_read(0x1FFF), 0xA5);
+    }
+
+    #[test]
+    fn chr_8kb_mode_ignores_chr_bank_1() {
+        // Default control is 8KB CHR mode: chr_bank_1 must not affect reads.
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_32kb(), Mirroring::Horizontal);
+
+        load_register(&mut mapper, 0xC000, 5); // chr_bank_1 (ignored in 8KB mode)
+
+        assert_eq!(mapper.ppu_read(0x0000), 0xA0);
+        assert_eq!(mapper.ppu_read(0x1000), 0xA1);
+        assert_eq!(mapper.ppu_read(0x1FFF), 0xA1);
+    }
+
+    #[test]
+    fn chr_8kb_mode_ignores_bank_bit_zero() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_32kb(), Mirroring::Horizontal);
+
+        load_register(&mut mapper, 0xA000, 1); // bit 0 ignored -> 8KB bank 0
+
+        assert_eq!(mapper.ppu_read(0x0000), 0xA0);
+    }
+
+    #[test]
+    fn ppu_write_updates_chr_ram_when_present() {
+        // An 8KB CHR store is treated as writable CHR RAM.
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_8kb(), Mirroring::Horizontal);
+
+        mapper.ppu_write(0x0000, 0x12);
+        mapper.ppu_write(0x1FFF, 0x34);
+
+        assert_eq!(mapper.ppu_read(0x0000), 0x12);
+        assert_eq!(mapper.ppu_read(0x1FFF), 0x34);
+    }
+
+    #[test]
+    fn ppu_write_is_ignored_when_chr_is_rom() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_32kb(), Mirroring::Horizontal);
+
+        mapper.ppu_write(0x0000, 0x12);
+
+        assert_eq!(mapper.ppu_read(0x0000), 0xA0);
+    }
+
+    #[test]
+    fn cpu_read_outside_prg_returns_zero() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_8kb(), Mirroring::Horizontal);
+
+        assert_eq!(mapper.cpu_read(0x0000), 0);
+        assert_eq!(mapper.cpu_read(0x6000), 0);
+        assert_eq!(mapper.cpu_read(0x7FFF), 0);
+    }
+
+    #[test]
+    fn ppu_read_outside_chr_returns_zero() {
+        let mut mapper = Mmc1::new(prg_rom_with_banks(2), chr_rom_32kb(), Mirroring::Horizontal);
+
+        assert_eq!(mapper.ppu_read(0x2000), 0);
+    }
+}
