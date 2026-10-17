@@ -1,5 +1,6 @@
 use crate::nes::cartridge::{Cartridge, Mirroring};
 use crate::nes::mapper::cnrom::Cnrom;
+use crate::nes::mapper::gxrom::Gxrom;
 use crate::nes::mapper::mmc1::Mmc1;
 use crate::nes::mapper::nrom::Nrom;
 use crate::nes::mapper::uxrom::Uxrom;
@@ -18,11 +19,13 @@ pub fn from_cartridge(cart: Cartridge) -> Box<dyn Mapper> {
         1 => Box::new(Mmc1::new(cart.prg_rom, cart.chr_rom, cart.mirroring)),
         2 => Box::new(Uxrom::new(cart.prg_rom, cart.chr_rom, cart.mirroring, 0)),
         3 => Box::new(Cnrom::new(cart.prg_rom, cart.chr_rom, cart.mirroring)),
+        66 => Box::new(Gxrom::new(cart.prg_rom, cart.chr_rom, cart.mirroring)),
         n => panic!("Unsupported mapper: {}", n),
     }
 }
 
 pub mod cnrom;
+pub mod gxrom;
 pub mod mmc1;
 pub mod nrom;
 pub mod uxrom;
