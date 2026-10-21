@@ -20,14 +20,11 @@ jobs:
             os: ubuntu-latest
             archive: tar.gz
             frontend: true
-          # The aarch64 Linux build is cross-compiled and intentionally ships
-          # only the CPU/offline tools; the Notan/cpal frontend needs ARM64
-          # ALSA/GL development libraries to link.
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
             cross: true
-            frontend: false
+            frontend: true
           - target: x86_64-apple-darwin
             os: macos-latest
             archive: tar.gz
@@ -55,12 +52,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-
-      - name: Install ALSA headers (cpal frontend)
-        if: matrix.frontend && runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev
 
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }} --bin ox6502 --bin nes_render
