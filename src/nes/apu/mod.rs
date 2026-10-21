@@ -122,10 +122,12 @@ impl Apu {
             _ => {}
         }
 
-        // Collect samples
-        self.sample_counter += 1;
-        if self.sample_counter >= CPU_FREQ / SAMPLE_RATE {
-            self.sample_counter = 0;
+        // Collect samples. Use a fractional accumulator: CPU_FREQ is not an
+        // integer multiple of SAMPLE_RATE, and dividing first produced
+        // 44744 Hz instead of the 44100 Hz the SDL audio device expects.
+        self.sample_counter += SAMPLE_RATE;
+        if self.sample_counter >= CPU_FREQ {
+            self.sample_counter -= CPU_FREQ;
             self.sample_buffer.push(self.mix());
         }
     }
@@ -222,5 +224,29 @@ impl Apu {
     /// Take buffered samples
     pub fn take_samples(&mut self) -> Vec<f32> {
         std::mem::take(&mut self.sample_buffer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Apu;
+
+    #[test]
+    fn generates_samples_at_the_configured_44100_hz() {
+        let mut apu = Apu::new();
+        for _ in 0..17898 {
+            apu.tick();
+        }
+
+        assert_eq!(apu.sample_buffer.len(), 441);
+    }
+
+    #[test]
+    fn reading_status_acknowledges_frame_interrupt() {
+        let mut apu = Apu::new();
+        apu.frame_interrupt = true;
+
+        assert_ne!(apu.read_status() & 0x40, 0);
+        assert_eq!(apu.read_status() & 0x40, 0);
     }
 }
