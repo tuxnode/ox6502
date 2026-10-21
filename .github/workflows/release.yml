@@ -25,14 +25,6 @@ jobs:
             archive: tar.gz
             cross: true
             frontend: true
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            archive: tar.gz
-            frontend: true
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            archive: tar.gz
-            frontend: true
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             archive: zip
