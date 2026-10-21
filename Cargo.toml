@@ -3,7 +3,18 @@ name = "ox6502"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# The real-time frontend pulls in windowing/GL and audio device libraries.
+# It is optional so CPU/NES offline builds stay dependency-light.
+frontend = ["dep:notan", "dep:cpal"]
+
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
-sdl2 = "0.38"
+notan = { version = "0.14", default-features = false, features = ["backend", "draw", "log", "glsl-to-spirv"], optional = true }
+cpal = { version = "0.18", optional = true }
+
+[[bin]]
+name = "nes_notan"
+path = "src/bin/nes_notan.rs"
+required-features = ["frontend"]
