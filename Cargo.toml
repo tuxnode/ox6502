@@ -6,12 +6,21 @@ edition = "2024"
 [features]
 # The real-time frontend pulls in windowing/GL and audio device libraries.
 # It is optional so CPU/NES offline builds stay dependency-light.
-frontend = ["dep:notan", "dep:cpal"]
+frontend = ["dep:notan", "dep:futures", "dep:pulseaudio", "dep:cpal"]
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 notan = { version = "0.14", default-features = false, features = ["backend", "draw", "log", "glsl-to-spirv"], optional = true }
+
+# Linux audio uses a native-Rust PulseAudio protocol client, so no
+# libasound2/libasound2-dev is required at build or link time.
+[target.'cfg(target_os = "linux")'.dependencies]
+futures = { version = "0.3", optional = true }
+pulseaudio = { version = "0.3.2", optional = true }
+
+# macOS/Windows audio goes through cpal (CoreAudio / WASAPI).
+[target.'cfg(not(target_os = "linux"))'.dependencies]
 cpal = { version = "0.18", optional = true }
 
 [[bin]]

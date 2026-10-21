@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 use std::fs;
 use std::sync::{Arc, Mutex};
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use notan::draw::*;
 use notan::prelude::*;
 
@@ -13,14 +12,86 @@ use ox6502::nes::cartridge;
 const NES_WIDTH: u32 = 256;
 const NES_HEIGHT: u32 = 240;
 const SCALE: u32 = 3;
+const APU_SAMPLE_RATE: u32 = 44100;
 
-/// Push the APU's 44.1 kHz mono output to the default audio device through
-/// cpal (a pure-Rust audio API), resampling if the device runs at another rate.
+/// Linux: stream to PulseAudio/PipeWire-pulse using a native-Rust
+/// implementation of the PulseAudio protocol. This avoids linking
+/// libasound2 (and therefore libasound2-dev) entirely.
+#[cfg(target_os = "linux")]
+struct AudioSink {
+    _client: pulseaudio::Client,
+    _stream: pulseaudio::PlaybackStream,
+    queue: Arc<Mutex<VecDeque<i16>>>,
+}
+
+#[cfg(target_os = "linux")]
+impl AudioSink {
+    fn new() -> Option<Self> {
+        use pulseaudio::AsPlaybackSource;
+        use pulseaudio::protocol::{
+            ChannelMap, ChannelVolume, DEFAULT_SINK, PlaybackStreamParams, SampleFormat, SampleSpec,
+        };
+
+        let client = pulseaudio::Client::from_env(c"ox6502").ok()?;
+        let params = PlaybackStreamParams {
+            sample_spec: SampleSpec {
+                format: SampleFormat::S16Le,
+                channels: 1,
+                sample_rate: APU_SAMPLE_RATE,
+            },
+            channel_map: ChannelMap::mono(),
+            sink_name: Some(DEFAULT_SINK.to_owned()),
+            cvolume: Some(ChannelVolume::norm(1)),
+            ..Default::default()
+        };
+
+        let queue = Arc::new(Mutex::new(VecDeque::with_capacity(8192)));
+        let callback_queue = Arc::clone(&queue);
+        let callback = move |buf: &mut [u8]| {
+            let mut queue = callback_queue.lock().unwrap();
+            for chunk in buf.chunks_mut(2) {
+                let sample = queue.pop_front().unwrap_or(0i16).to_le_bytes();
+                chunk.copy_from_slice(&sample[..chunk.len()]);
+            }
+            buf.len()
+        };
+
+        let stream = futures::executor::block_on(
+            client.create_playback_stream(params, callback.as_playback_source()),
+        )
+        .ok()?;
+
+        Some(Self {
+            _client: client,
+            _stream: stream,
+            queue,
+        })
+    }
+
+    fn push(&self, samples: &[f32]) {
+        let mut queue = self.queue.lock().unwrap();
+        if queue.len() < APU_SAMPLE_RATE as usize {
+            queue.extend(
+                samples
+                    .iter()
+                    .map(|s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16),
+            );
+        }
+    }
+}
+
+/// macOS/Windows (and other non-Linux Unixes): use cpal, which talks to
+/// CoreAudio/WASAPI without any external SDK. Resample to the device rate.
+#[cfg(not(target_os = "linux"))]
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+#[cfg(not(target_os = "linux"))]
 struct AudioSink {
     _stream: cpal::Stream,
     queue: Arc<Mutex<VecDeque<f32>>>,
 }
 
+#[cfg(not(target_os = "linux"))]
 impl AudioSink {
     fn new() -> Option<Self> {
         let host = cpal::default_host();
@@ -29,7 +100,7 @@ impl AudioSink {
         let sample_format = supported.sample_format();
         let config: cpal::StreamConfig = supported.into();
         let channels = config.channels as usize;
-        let step = 44100.0 / config.sample_rate as f64;
+        let step = APU_SAMPLE_RATE as f64 / config.sample_rate as f64;
         let queue = Arc::new(Mutex::new(VecDeque::with_capacity(8192)));
 
         let stream = match sample_format {
@@ -69,12 +140,13 @@ impl AudioSink {
     fn push(&self, samples: &[f32]) {
         let mut queue = self.queue.lock().unwrap();
         // Never let a stalled device make the queue grow without bound.
-        if queue.len() < 44_100 {
+        if queue.len() < APU_SAMPLE_RATE as usize {
             queue.extend(samples.iter().copied());
         }
     }
 }
 
+#[cfg(not(target_os = "linux"))]
 fn build_stream<T>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
