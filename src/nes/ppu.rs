@@ -105,12 +105,17 @@ impl Ppu {
     pub fn tick(&mut self) {
         self.dot += 1;
 
-        if self.scanline < FB_HEIGHT as u16 && self.rendering_enabled() {
-            if self.dot == 1 {
-                self.latch_render_scroll();
-                self.render_scanline_without_sprite_zero_hit(self.scanline as usize);
+        if self.scanline < FB_HEIGHT as u16 {
+            if self.rendering_enabled() {
+                if self.dot == 1 {
+                    self.latch_render_scroll();
+                    self.render_scanline_without_sprite_zero_hit(self.scanline as usize);
+                }
+                self.update_sprite_zero_hit_for_dot();
+            } else if self.dot == 1 {
+                // Rendering disabled: the PPU outputs the backdrop colour.
+                self.clear_scanline(self.scanline as usize);
             }
-            self.update_sprite_zero_hit_for_dot();
         }
 
         if self.dot > 340 {
@@ -135,15 +140,19 @@ impl Ppu {
     {
         self.dot += 1;
 
-        if self.scanline < FB_HEIGHT as u16 && self.rendering_enabled() {
-            if self.dot == 1 {
-                self.latch_render_scroll();
-                self.render_scanline_without_sprite_zero_hit_mapped(
-                    self.scanline as usize,
-                    read_chr,
-                );
+        if self.scanline < FB_HEIGHT as u16 {
+            if self.rendering_enabled() {
+                if self.dot == 1 {
+                    self.latch_render_scroll();
+                    self.render_scanline_without_sprite_zero_hit_mapped(
+                        self.scanline as usize,
+                        read_chr,
+                    );
+                }
+                self.update_sprite_zero_hit_for_dot_mapped(read_chr);
+            } else if self.dot == 1 {
+                self.clear_scanline(self.scanline as usize);
             }
-            self.update_sprite_zero_hit_for_dot_mapped(read_chr);
         }
 
         if self.dot > 340 {
@@ -1300,6 +1309,22 @@ mod tests {
             &[expected.0, expected.1, expected.2]
         );
         assert_eq!(ppu.scanline(), 1);
+    }
+
+    #[test]
+    fn disabled_rendering_outputs_backdrop_instead_of_stale_pixels() {
+        let mut ppu = Ppu::new(vec![0; 0x2000]);
+        ppu.frame_buffer[0..3].copy_from_slice(&[1, 2, 3]);
+
+        for _ in 0..341 {
+            ppu.tick();
+        }
+
+        let backdrop = palette::SYSTEM_PALETTE[0];
+        assert_eq!(
+            &ppu.frame_buffer()[0..3],
+            &[backdrop.0, backdrop.1, backdrop.2]
+        );
     }
 
     #[test]
