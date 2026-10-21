@@ -98,14 +98,14 @@ fn main() {
             }
         }
 
-        // Run CPU until NMI fires (one frame)
-        let mut frame_done = false;
-        while !frame_done {
+        // Run CPU until the PPU completes a frame. Using the PPU frame
+        // counter (instead of waiting for NMI) also works for games that
+        // temporarily disable NMI while polling $2002.
+        let frame_before = cpu.bus().ppu.frame();
+        while cpu.bus().ppu.frame() == frame_before {
             let tick = cpu.step_nes();
-
             if tick.nmi {
                 cpu.handle_nmi();
-                frame_done = true;
             }
         }
 

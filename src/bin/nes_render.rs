@@ -28,19 +28,22 @@ fn main() {
     let mut completed_frames = 0;
 
     loop {
-        let tick = cpu.step_nes();
-
-        if tick.nmi {
-            cpu.handle_nmi();
-            completed_frames += 1;
-            eprintln!(
-                "Frame {} completed at cycle {}",
-                completed_frames, cpu.cycles
-            );
-
-            if completed_frames >= max_frames {
-                break;
+        let frame_before = cpu.bus().ppu.frame();
+        while cpu.bus().ppu.frame() == frame_before {
+            let tick = cpu.step_nes();
+            if tick.nmi {
+                cpu.handle_nmi();
             }
+        }
+
+        completed_frames += 1;
+        eprintln!(
+            "Frame {} completed at cycle {}",
+            completed_frames, cpu.cycles
+        );
+
+        if completed_frames >= max_frames {
+            break;
         }
     }
 
