@@ -233,7 +233,7 @@ mod tests {
         bus.cpu_write(0x2006, 0x3F);
         bus.cpu_write(0x2006, 0x01);
         bus.cpu_write(0x2007, 0x01);
-        bus.cpu_write(0x2001, 0x08);
+        bus.cpu_write(0x2001, 0x0A); // show background, including leftmost 8 pixels
 
         for _ in 0..114 {
             bus.tick_ppu(1);

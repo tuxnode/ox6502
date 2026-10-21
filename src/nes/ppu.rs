@@ -6,16 +6,20 @@ use crate::nes::palette;
  * NES Dev Wiki: https://www.nesdev.org/wiki/PPU
  *
  * CPU-facing registers are at $2000-$2007, mirrored every 8 bytes to $3FFF.
- * Only the register-level interface is implemented here — no rendering.
+ * Rendering is done per scanline into a 256x240 RGB frame buffer.
  */
 
 // PPUCTRL ($2000) bits
 const CTRL_NMI_ENABLE: u8 = 0x80; // bit 7: NMI enable
+const CTRL_SPR_HEIGHT: u8 = 0x20; // bit 5: sprite height (0: 8x8, 1: 8x16)
 const CTRL_BG_ADDR: u8 = 0x10; // bit 4: background pattern table (0: $0000, 1: $1000)
 const CTRL_SPR_ADDR: u8 = 0x08; // bit 3: sprite pattern table (0: $0000, 1: $1000)
 const CTRL_VRAM_INCR: u8 = 0x04; // bit 2: VRAM address increment (0: +1 across, 1: +32 down)
 
 // PPUMASK ($2001) bits
+const MASK_GRAYSCALE: u8 = 0x01; // bit 0: grayscale
+const MASK_SHOW_BG_LEFT: u8 = 0x02; // bit 1: show background in leftmost 8 pixels
+const MASK_SHOW_SPR_LEFT: u8 = 0x04; // bit 2: show sprites in leftmost 8 pixels
 const MASK_SHOW_BG: u8 = 0x08; // bit 3: show background
 const MASK_SHOW_SPR: u8 = 0x10; // bit 4: show sprites
 
@@ -59,7 +63,7 @@ pub struct Ppu {
 
     // Internal memory
     chr_rom: Vec<u8>,  // Pattern tables from cartridge CHR ROM
-    vram: [u8; 2048],  // 2KB VRAM (nametables $2000-$2FFF)
+    vram: [u8; 4096],  // 4KB VRAM (2KB CIRAM + 2KB for four-screen carts)
     palette: [u8; 32], // Palette RAM ($3F00-$3F1F)
     oam: [u8; 256],    // OAM (Object Attribute Memory)
 
@@ -90,7 +94,7 @@ impl Ppu {
             render_scroll_y: 0,
             render_base_nt: 0,
             chr_rom,
-            vram: [0; 2048],
+            vram: [0; 4096],
             palette: [0; 32],
             oam: [0; 256],
             nmi_pending: false,
@@ -187,11 +191,20 @@ impl Ppu {
             // $2006 PPUADDR — write only
             6 => 0,
 
-            // $2007 PPUDATA — read VRAM with buffering
+            // $2007 PPUDATA — read VRAM with buffering. Palette reads are
+            // returned immediately; the buffer is filled from the nametable
+            // address "underneath" the palette instead.
             7 => {
                 let addr = self.v;
-                let val = self.read_buffer;
-                self.read_buffer = self.ppu_read(addr);
+                let val = if (addr & 0x3F00) == 0x3F00 {
+                    let value = self.ppu_read(addr);
+                    self.read_buffer = self.ppu_read(addr & 0x2FFF);
+                    value
+                } else {
+                    let value = self.read_buffer;
+                    self.read_buffer = self.ppu_read(addr);
+                    value
+                };
                 self.increment_vram_addr();
                 val
             }
@@ -219,8 +232,15 @@ impl Ppu {
             6 => 0,
             7 => {
                 let addr = self.v;
-                let val = self.read_buffer;
-                self.read_buffer = self.ppu_read_mapped(addr, read_chr);
+                let val = if (addr & 0x3F00) == 0x3F00 {
+                    let value = self.ppu_read_mapped(addr, read_chr);
+                    self.read_buffer = self.ppu_read_mapped(addr & 0x2FFF, read_chr);
+                    value
+                } else {
+                    let value = self.read_buffer;
+                    self.read_buffer = self.ppu_read_mapped(addr, read_chr);
+                    value
+                };
                 self.increment_vram_addr();
                 val
             }
@@ -515,7 +535,8 @@ impl Ppu {
         } else {
             1
         };
-        self.v = self.v.wrapping_add(increment);
+        // v is a 15-bit register; accesses above $3FFF wrap around.
+        self.v = self.v.wrapping_add(increment) & 0x7FFF;
     }
 
     /// OAM DMA: copy 256 bytes to OAM starting at current oam_addr
@@ -530,6 +551,56 @@ impl Ppu {
     /// Check if background or sprite rendering is enabled
     pub fn rendering_enabled(&self) -> bool {
         (self.mask & MASK_SHOW_BG) != 0 || (self.mask & MASK_SHOW_SPR) != 0
+    }
+
+    /// Map a palette index to RGB, honouring PPUMASK's grayscale bit.
+    fn palette_color(&self, index: u8) -> (u8, u8, u8) {
+        let index = if (self.mask & MASK_GRAYSCALE) != 0 {
+            index & 0x30
+        } else {
+            index
+        };
+        palette::SYSTEM_PALETTE[index as usize]
+    }
+
+    /// Current sprite height in pixels (8 or 16).
+    fn sprite_height(&self) -> i16 {
+        if (self.ctrl & CTRL_SPR_HEIGHT) != 0 {
+            16
+        } else {
+            8
+        }
+    }
+
+    /// Resolve the pattern-table address and row for one line of a sprite.
+    ///
+    /// In 8x16 mode the tile index's low bit selects the pattern table and the
+    /// two tiles are consecutive; vertical flip applies to the whole 16-pixel
+    /// sprite, not to each tile individually.
+    fn sprite_tile_row(&self, tile_index: u8, attr: u8, ty: i16) -> (u16, u16) {
+        let height = self.sprite_height();
+        let row = if (attr & 0x80) != 0 {
+            height - 1 - ty
+        } else {
+            ty
+        };
+
+        if height == 16 {
+            let bank = if (tile_index & 0x01) != 0 {
+                0x1000
+            } else {
+                0x0000
+            };
+            let tile = (tile_index & 0xFE) as u16 + (row / 8) as u16;
+            (bank + tile * 16, (row % 8) as u16)
+        } else {
+            let bank = if (self.ctrl & CTRL_SPR_ADDR) != 0 {
+                0x1000
+            } else {
+                0x0000
+            };
+            (bank + tile_index as u16 * 16, row.clamp(0, 7) as u16)
+        }
     }
 
     fn latch_render_scroll(&mut self) {
@@ -599,7 +670,7 @@ impl Ppu {
     }
 
     fn clear_scanline(&mut self, py: usize) {
-        let (r, g, b) = palette::SYSTEM_PALETTE[self.palette[0] as usize];
+        let (r, g, b) = self.palette_color(self.palette[0]);
         for px in 0..FB_WIDTH {
             let offset = (py * FB_WIDTH + px) * 3;
             self.frame_buffer[offset] = r;
@@ -618,16 +689,23 @@ impl Ppu {
 
     fn render_background_scanline(&mut self, py: usize, bg_opaque: &mut [bool; FB_WIDTH]) {
         for (px, opaque) in bg_opaque.iter_mut().enumerate() {
-            let (palette_entry, is_opaque) = self.background_pixel(
-                px,
-                py,
-                self.render_scroll_x,
-                self.render_scroll_y,
-                self.render_base_nt,
-            );
+            // The leftmost 8 pixels are forced to the backdrop colour unless
+            // PPUMASK bit 1 enables background clipping.
+            let clipped = px < 8 && (self.mask & MASK_SHOW_BG_LEFT) == 0;
+            let (palette_entry, is_opaque) = if clipped {
+                (self.palette[0], false)
+            } else {
+                self.background_pixel(
+                    px,
+                    py,
+                    self.render_scroll_x,
+                    self.render_scroll_y,
+                    self.render_base_nt,
+                )
+            };
             *opaque = is_opaque;
 
-            let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+            let (r, g, b) = self.palette_color(palette_entry);
             let offset = (py * FB_WIDTH + px) * 3;
             self.frame_buffer[offset] = r;
             self.frame_buffer[offset + 1] = g;
@@ -644,17 +722,22 @@ impl Ppu {
         F: FnMut(u16) -> u8,
     {
         for (px, opaque) in bg_opaque.iter_mut().enumerate() {
-            let (palette_entry, is_opaque) = self.background_pixel_mapped(
-                px,
-                py,
-                self.render_scroll_x,
-                self.render_scroll_y,
-                self.render_base_nt,
-                read_chr,
-            );
+            let clipped = px < 8 && (self.mask & MASK_SHOW_BG_LEFT) == 0;
+            let (palette_entry, is_opaque) = if clipped {
+                (self.palette[0], false)
+            } else {
+                self.background_pixel_mapped(
+                    px,
+                    py,
+                    self.render_scroll_x,
+                    self.render_scroll_y,
+                    self.render_base_nt,
+                    read_chr,
+                )
+            };
             *opaque = is_opaque;
 
-            let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+            let (r, g, b) = self.palette_color(palette_entry);
             let offset = (py * FB_WIDTH + px) * 3;
             self.frame_buffer[offset] = r;
             self.frame_buffer[offset + 1] = g;
@@ -775,6 +858,35 @@ impl Ppu {
         }
     }
 
+    /// Find the sprites that intersect a scanline. Only the first eight are
+    /// drawn; a ninth (or later) sprite sets the sprite-overflow flag.
+    fn sprites_on_scanline(&mut self, py: usize) -> ([usize; 8], usize) {
+        let height = self.sprite_height();
+        let mut selected = [0usize; 8];
+        let mut count = 0usize;
+        let mut overflow = false;
+
+        for i in (0..self.oam.len()).step_by(4) {
+            let y = self.oam[i] as i16 + 1;
+            if py < y as usize || py >= (y + height) as usize {
+                continue;
+            }
+
+            count += 1;
+            if count <= 8 {
+                selected[count - 1] = i;
+            } else {
+                overflow = true;
+            }
+        }
+
+        if overflow {
+            self.status |= STATUS_OVERFLOW;
+        }
+
+        (selected, count.min(8))
+    }
+
     fn render_sprite_scanline(
         &mut self,
         py: usize,
@@ -785,35 +897,26 @@ impl Ppu {
             return;
         }
 
-        let bank: u16 = if (self.ctrl & CTRL_SPR_ADDR) != 0 {
-            0x1000
-        } else {
-            0x0000
-        };
-
-        // Iterate in reverse so sprite 0 (highest priority) draws last
-        for i in (0..self.oam.len()).step_by(4).rev() {
+        let (selected, count) = self.sprites_on_scanline(py);
+        // Draw the selected sprites back-to-front so sprite 0 wins priority.
+        for &i in selected[..count].iter().rev() {
             let y = self.oam[i] as i16 + 1;
-            let tile_index = self.oam[i + 1] as u16;
+            let tile_index = self.oam[i + 1];
             let attr = self.oam[i + 2];
             let x = self.oam[i + 3] as i16;
 
-            if py < y as usize || py >= (y + 8) as usize {
-                continue;
-            }
-
             let flip_h = (attr & 0x40) != 0;
-            let flip_v = (attr & 0x80) != 0;
             let palette_idx = (attr & 0x03) as usize;
             let priority_behind = (attr & 0x20) != 0;
+            let ty = py as i16 - y;
 
-            let tile_addr = (bank + tile_index * 16) as usize;
-            if tile_addr + 15 >= self.chr_rom.len() {
+            let (tile_addr, sy) = self.sprite_tile_row(tile_index, attr, ty);
+            let tile_addr = tile_addr as usize;
+            let sy = sy as usize;
+            if tile_addr + 8 + sy >= self.chr_rom.len() {
                 continue;
             }
 
-            let ty = py as i16 - y;
-            let sy = if flip_v { 7 - ty } else { ty } as usize;
             let lo_byte = self.chr_rom[tile_addr + sy];
             let hi_byte = self.chr_rom[tile_addr + 8 + sy];
 
@@ -834,6 +937,11 @@ impl Ppu {
                 }
 
                 let px = px as usize;
+                // Sprites are hidden in the leftmost 8 pixels unless enabled.
+                if px < 8 && (self.mask & MASK_SHOW_SPR_LEFT) == 0 {
+                    continue;
+                }
+
                 if update_sprite_zero_hit && i == 0 && px != 255 && bg_opaque[px] {
                     self.status |= STATUS_SPR0_HIT;
                 }
@@ -843,7 +951,7 @@ impl Ppu {
                 }
 
                 let palette_entry = self.palette[0x11 + palette_idx * 4 + (color_idx - 1) as usize];
-                let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+                let (r, g, b) = self.palette_color(palette_entry);
                 let offset = (py * FB_WIDTH + px) * 3;
                 self.frame_buffer[offset] = r;
                 self.frame_buffer[offset + 1] = g;
@@ -865,30 +973,19 @@ impl Ppu {
             return;
         }
 
-        let bank: u16 = if (self.ctrl & CTRL_SPR_ADDR) != 0 {
-            0x1000
-        } else {
-            0x0000
-        };
-
-        for i in (0..self.oam.len()).step_by(4).rev() {
+        let (selected, count) = self.sprites_on_scanline(py);
+        for &i in selected[..count].iter().rev() {
             let y = self.oam[i] as i16 + 1;
-            let tile_index = self.oam[i + 1] as u16;
+            let tile_index = self.oam[i + 1];
             let attr = self.oam[i + 2];
             let x = self.oam[i + 3] as i16;
 
-            if py < y as usize || py >= (y + 8) as usize {
-                continue;
-            }
-
             let flip_h = (attr & 0x40) != 0;
-            let flip_v = (attr & 0x80) != 0;
             let palette_idx = (attr & 0x03) as usize;
             let priority_behind = (attr & 0x20) != 0;
-
-            let tile_addr = bank + tile_index * 16;
             let ty = py as i16 - y;
-            let sy = if flip_v { 7 - ty } else { ty } as u16;
+
+            let (tile_addr, sy) = self.sprite_tile_row(tile_index, attr, ty);
             let lo_byte = read_chr(tile_addr + sy);
             let hi_byte = read_chr(tile_addr + 8 + sy);
 
@@ -909,6 +1006,10 @@ impl Ppu {
                 }
 
                 let px = px as usize;
+                if px < 8 && (self.mask & MASK_SHOW_SPR_LEFT) == 0 {
+                    continue;
+                }
+
                 if update_sprite_zero_hit && i == 0 && px != 255 && bg_opaque[px] {
                     self.status |= STATUS_SPR0_HIT;
                 }
@@ -918,7 +1019,7 @@ impl Ppu {
                 }
 
                 let palette_entry = self.palette[0x11 + palette_idx * 4 + (color_idx - 1) as usize];
-                let (r, g, b) = palette::SYSTEM_PALETTE[palette_entry as usize];
+                let (r, g, b) = self.palette_color(palette_entry);
                 let offset = (py * FB_WIDTH + px) * 3;
                 self.frame_buffer[offset] = r;
                 self.frame_buffer[offset + 1] = g;
@@ -940,6 +1041,14 @@ impl Ppu {
 
         let px = (self.dot - 1) as usize;
         if px == 255 {
+            return;
+        }
+        // Sprite 0 hit never occurs in the leftmost 8 pixels when either the
+        // background or the sprites are clipped there.
+        if px < 8
+            && (self.mask & (MASK_SHOW_BG_LEFT | MASK_SHOW_SPR_LEFT))
+                != (MASK_SHOW_BG_LEFT | MASK_SHOW_SPR_LEFT)
+        {
             return;
         }
 
@@ -978,6 +1087,12 @@ impl Ppu {
         if px == 255 {
             return;
         }
+        if px < 8
+            && (self.mask & (MASK_SHOW_BG_LEFT | MASK_SHOW_SPR_LEFT))
+                != (MASK_SHOW_BG_LEFT | MASK_SHOW_SPR_LEFT)
+        {
+            return;
+        }
 
         let py = self.scanline as usize;
         let (_, bg_opaque) = self.background_pixel_mapped(
@@ -999,7 +1114,7 @@ impl Ppu {
 
     fn sprite_zero_opaque_at(&self, px: usize, py: usize) -> bool {
         let y = self.oam[0] as i16 + 1;
-        if py < y as usize || py >= (y + 8) as usize {
+        if py < y as usize || py >= (y + self.sprite_height()) as usize {
             return false;
         }
 
@@ -1008,23 +1123,18 @@ impl Ppu {
             return false;
         }
 
-        let bank: u16 = if (self.ctrl & CTRL_SPR_ADDR) != 0 {
-            0x1000
-        } else {
-            0x0000
-        };
-        let tile_addr = (bank + self.oam[1] as u16 * 16) as usize;
-        if tile_addr + 15 >= self.chr_rom.len() {
+        let attr = self.oam[2];
+        let flip_h = (attr & 0x40) != 0;
+        let tx = px as i16 - x;
+        let sx = if flip_h { 7 - tx } else { tx } as usize;
+
+        let (tile_addr, sy) = self.sprite_tile_row(self.oam[1], attr, py as i16 - y);
+        let tile_addr = tile_addr as usize;
+        let sy = sy as usize;
+        if tile_addr + 8 + sy >= self.chr_rom.len() {
             return false;
         }
 
-        let attr = self.oam[2];
-        let flip_h = (attr & 0x40) != 0;
-        let flip_v = (attr & 0x80) != 0;
-        let tx = px as i16 - x;
-        let ty = py as i16 - y;
-        let sx = if flip_h { 7 - tx } else { tx } as usize;
-        let sy = if flip_v { 7 - ty } else { ty } as usize;
         let bit = 7 - sx;
         let lo = (self.chr_rom[tile_addr + sy] >> bit) & 1;
         let hi = (self.chr_rom[tile_addr + 8 + sy] >> bit) & 1;
@@ -1037,7 +1147,7 @@ impl Ppu {
         F: FnMut(u16) -> u8,
     {
         let y = self.oam[0] as i16 + 1;
-        if py < y as usize || py >= (y + 8) as usize {
+        if py < y as usize || py >= (y + self.sprite_height()) as usize {
             return false;
         }
 
@@ -1046,20 +1156,12 @@ impl Ppu {
             return false;
         }
 
-        let bank: u16 = if (self.ctrl & CTRL_SPR_ADDR) != 0 {
-            0x1000
-        } else {
-            0x0000
-        };
-        let tile_addr = bank + self.oam[1] as u16 * 16;
-
         let attr = self.oam[2];
         let flip_h = (attr & 0x40) != 0;
-        let flip_v = (attr & 0x80) != 0;
         let tx = px as i16 - x;
-        let ty = py as i16 - y;
         let sx = if flip_h { 7 - tx } else { tx } as u16;
-        let sy = if flip_v { 7 - ty } else { ty } as u16;
+
+        let (tile_addr, sy) = self.sprite_tile_row(self.oam[1], attr, py as i16 - y);
         let bit = 7 - sx;
         let lo = (read_chr(tile_addr + sy) >> bit) & 1;
         let hi = (read_chr(tile_addr + 8 + sy) >> bit) & 1;
@@ -1127,7 +1229,7 @@ impl Ppu {
                 1 | 3 => 0x400 + offset,
                 _ => unreachable!(),
             },
-            Mirroring::FourScreen => (addr as usize & 0x0FFF) % 2048,
+            Mirroring::FourScreen => addr as usize & 0x0FFF,
             Mirroring::OneScreenA => offset,
             Mirroring::OneScreenB => 0x400 + offset,
         }
@@ -1164,7 +1266,8 @@ mod tests {
         set_tile_color(&mut ppu, 0, 1);
         set_tile_color(&mut ppu, 1, 2);
         ppu.ppu_write(0x2000, 0);
-        ppu.ppu_write(0x2001, 1);
+        ppu.ppu_write(0x2001, 1); // tile index for the second column
+        ppu.write_register(0x2001, MASK_SHOW_BG | MASK_SHOW_BG_LEFT);
         ppu.ppu_write(0x3F01, 0x01);
         ppu.ppu_write(0x3F02, 0x02);
 
@@ -1185,7 +1288,7 @@ mod tests {
         set_tile_color(&mut ppu, 0, 1);
         ppu.ppu_write(0x2000, 0);
         ppu.ppu_write(0x3F01, 0x01);
-        ppu.write_register(0x2001, MASK_SHOW_BG);
+        ppu.write_register(0x2001, MASK_SHOW_BG | MASK_SHOW_BG_LEFT);
 
         for _ in 0..341 {
             ppu.tick();
@@ -1205,7 +1308,10 @@ mod tests {
         set_tile_color(&mut ppu, 0, 1);
         ppu.ppu_write(0x2000, 0);
         ppu.ppu_write(0x3F01, 0x01);
-        ppu.write_register(0x2001, MASK_SHOW_BG | MASK_SHOW_SPR);
+        ppu.write_register(
+            0x2001,
+            MASK_SHOW_BG | MASK_SHOW_SPR | MASK_SHOW_BG_LEFT | MASK_SHOW_SPR_LEFT,
+        );
 
         ppu.oam[0] = 0;
         ppu.oam[1] = 0;
@@ -1215,6 +1321,171 @@ mod tests {
         ppu.render_scanline(1);
 
         assert_ne!(ppu.status & STATUS_SPR0_HIT, 0);
+    }
+
+    #[test]
+    fn renders_8x16_sprites_from_both_pattern_tiles() {
+        let mut ppu = Ppu::new(vec![0; 0x2000]);
+        // Tile index $01 selects pattern table $1000, tiles $00 and $01.
+        set_tile_color(&mut ppu, 0x1000 / 16, 1);
+        set_tile_color(&mut ppu, 0x1010 / 16, 2);
+        ppu.ppu_write(0x3F00, 0x0F);
+        ppu.ppu_write(0x3F11, 0x16);
+        ppu.ppu_write(0x3F12, 0x2A);
+        ppu.write_register(0x2000, CTRL_SPR_HEIGHT);
+        ppu.write_register(0x2001, MASK_SHOW_SPR | MASK_SHOW_SPR_LEFT);
+
+        ppu.oam[0] = 0; // top of sprite is scanline 1
+        ppu.oam[1] = 0x01;
+        ppu.oam[2] = 0;
+        ppu.oam[3] = 0;
+
+        ppu.render_scanline(1);
+        let top = palette::SYSTEM_PALETTE[0x16];
+        assert_eq!(
+            &ppu.frame_buffer()[1 * FB_WIDTH * 3..1 * FB_WIDTH * 3 + 3],
+            &[top.0, top.1, top.2]
+        );
+
+        ppu.render_scanline(9); // ninth line of the 16-pixel sprite
+        let bottom = palette::SYSTEM_PALETTE[0x2A];
+        assert_eq!(
+            &ppu.frame_buffer()[9 * FB_WIDTH * 3..9 * FB_WIDTH * 3 + 3],
+            &[bottom.0, bottom.1, bottom.2]
+        );
+    }
+
+    #[test]
+    fn ninth_sprite_sets_overflow_flag_and_is_not_drawn() {
+        let mut ppu = Ppu::new(vec![0; 0x2000]);
+        set_tile_color(&mut ppu, 0, 1);
+        ppu.ppu_write(0x3F00, 0x0F);
+        ppu.ppu_write(0x3F11, 0x16);
+        ppu.write_register(0x2001, MASK_SHOW_SPR | MASK_SHOW_SPR_LEFT);
+
+        for sprite in 0..9 {
+            let i = sprite * 4;
+            ppu.oam[i] = 0;
+            ppu.oam[i + 1] = 0;
+            ppu.oam[i + 2] = 0;
+            ppu.oam[i + 3] = sprite as u8 * 8;
+        }
+
+        ppu.render_scanline(1);
+
+        assert_ne!(ppu.status & STATUS_OVERFLOW, 0);
+        // Only the first eight sprites (x = 0..56) are rendered.
+        let color = palette::SYSTEM_PALETTE[0x16];
+        let offset = 56 * 3;
+        assert_eq!(
+            &ppu.frame_buffer()[FB_WIDTH * 3 + offset..FB_WIDTH * 3 + offset + 3],
+            &[color.0, color.1, color.2]
+        );
+        let backdrop = palette::SYSTEM_PALETTE[0x0F];
+        let offset = 64 * 3;
+        assert_eq!(
+            &ppu.frame_buffer()[FB_WIDTH * 3 + offset..FB_WIDTH * 3 + offset + 3],
+            &[backdrop.0, backdrop.1, backdrop.2]
+        );
+    }
+
+    #[test]
+    fn clips_background_and_sprites_in_leftmost_8_pixels() {
+        let mut ppu = Ppu::new(vec![0; 0x2000]);
+        set_tile_color(&mut ppu, 0, 1);
+        ppu.ppu_write(0x3F00, 0x0F);
+        ppu.ppu_write(0x3F01, 0x16);
+        ppu.ppu_write(0x3F11, 0x2A);
+        ppu.write_register(0x2001, MASK_SHOW_BG);
+
+        ppu.render_scanline(0);
+        let backdrop = palette::SYSTEM_PALETTE[0x0F];
+        assert_eq!(
+            &ppu.frame_buffer()[0..3],
+            &[backdrop.0, backdrop.1, backdrop.2]
+        );
+        let background = palette::SYSTEM_PALETTE[0x16];
+        assert_eq!(
+            &ppu.frame_buffer()[8 * 3..8 * 3 + 3],
+            &[background.0, background.1, background.2]
+        );
+
+        ppu.write_register(0x2001, MASK_SHOW_BG | MASK_SHOW_BG_LEFT);
+        ppu.render_scanline(0);
+        assert_eq!(
+            &ppu.frame_buffer()[0..3],
+            &[background.0, background.1, background.2]
+        );
+
+        // Sprites are clipped independently by PPUMASK bit 2.
+        ppu.write_register(0x2001, MASK_SHOW_SPR);
+        ppu.oam[0] = 0;
+        ppu.oam[1] = 0;
+        ppu.oam[2] = 0;
+        ppu.oam[3] = 0;
+        ppu.render_scanline(1);
+        assert_eq!(
+            &ppu.frame_buffer()[FB_WIDTH * 3..FB_WIDTH * 3 + 3],
+            &[backdrop.0, backdrop.1, backdrop.2]
+        );
+
+        ppu.write_register(0x2001, MASK_SHOW_SPR | MASK_SHOW_SPR_LEFT);
+        ppu.render_scanline(1);
+        let sprite = palette::SYSTEM_PALETTE[0x2A];
+        assert_eq!(
+            &ppu.frame_buffer()[FB_WIDTH * 3..FB_WIDTH * 3 + 3],
+            &[sprite.0, sprite.1, sprite.2]
+        );
+    }
+
+    #[test]
+    fn grayscale_masks_palette_index_to_low_contrast_bits() {
+        let mut ppu = Ppu::new(vec![0; 0x2000]);
+        set_tile_color(&mut ppu, 0, 1);
+        ppu.ppu_write(0x3F01, 0x16);
+        ppu.write_register(0x2001, MASK_SHOW_BG | MASK_GRAYSCALE);
+
+        ppu.render_scanline(0);
+
+        let gray = palette::SYSTEM_PALETTE[0x10];
+        assert_eq!(
+            &ppu.frame_buffer()[8 * 3..8 * 3 + 3],
+            &[gray.0, gray.1, gray.2]
+        );
+    }
+
+    #[test]
+    fn palette_data_read_returns_palette_byte_and_buffers_nametable_byte() {
+        let mut ppu = Ppu::new(vec![0; 0x2000]);
+        ppu.ppu_write(0x3F00, 0x30);
+        ppu.ppu_write(0x2F00, 0xAB);
+
+        ppu.write_register(0x2006, 0x3F);
+        ppu.write_register(0x2006, 0x00);
+        assert_eq!(ppu.read_register(0x2007), 0x30);
+
+        ppu.write_register(0x2006, 0x20);
+        ppu.write_register(0x2006, 0x00);
+        assert_eq!(ppu.read_register(0x2007), 0xAB);
+    }
+
+    #[test]
+    fn four_screen_mirroring_exposes_all_four_nametables() {
+        let mut ppu = Ppu::new(vec![0; 0x2000]);
+        ppu.set_mirroring(Mirroring::FourScreen);
+        for (addr, value) in [
+            (0x2000, 0x11),
+            (0x2400, 0x22),
+            (0x2800, 0x33),
+            (0x2C00, 0x44),
+        ] {
+            ppu.ppu_write(addr, value);
+        }
+
+        assert_eq!(ppu.ppu_read(0x2000), 0x11);
+        assert_eq!(ppu.ppu_read(0x2400), 0x22);
+        assert_eq!(ppu.ppu_read(0x2800), 0x33);
+        assert_eq!(ppu.ppu_read(0x2C00), 0x44);
     }
 
     #[test]
