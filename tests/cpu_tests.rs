@@ -92,6 +92,85 @@ impl Bus for SyncTestBus {
     }
 }
 
+struct DmaTestBus {
+    memory: [u8; 0x10000],
+    ticked_cycles: u32,
+    pending_extra: u32,
+}
+
+impl DmaTestBus {
+    fn new() -> Self {
+        Self {
+            memory: [0; 0x10000],
+            ticked_cycles: 0,
+            pending_extra: 0,
+        }
+    }
+}
+
+impl Bus for DmaTestBus {
+    fn cpu_read(&mut self, addr: u16) -> u8 {
+        self.memory[addr as usize]
+    }
+
+    fn cpu_write(&mut self, addr: u16, val: u8) {
+        self.memory[addr as usize] = val;
+    }
+
+    fn ppu_read(&mut self, _addr: u16) -> u8 {
+        0
+    }
+
+    fn ppu_write(&mut self, _addr: u16, _val: u8) {}
+
+    fn tick(&mut self, cpu_cycles: u8) -> ox6502::bus::TickResult {
+        self.ticked_cycles += cpu_cycles as u32;
+        if self.pending_extra > 0 {
+            let extra = self.pending_extra;
+            self.pending_extra = 0;
+            ox6502::bus::TickResult {
+                extra_cycles: extra,
+                nmi: false,
+            }
+        } else {
+            ox6502::bus::TickResult::default()
+        }
+    }
+}
+
+#[test]
+fn test_step_nes_keeps_bus_running_during_dma_stall() {
+    let mut bus = DmaTestBus::new();
+    bus.memory[0x0400] = LDA_IMM;
+    bus.memory[0x0401] = 0x42;
+    bus.memory[0xFFFC] = 0x00;
+    bus.memory[0xFFFD] = 0x04;
+    bus.pending_extra = 513; // pretend an OAM DMA was just triggered
+    let mut cpu = Cpu::new(bus);
+
+    cpu.step_nes();
+
+    // The instruction itself (2 cycles) plus all 513 DMA cycles are clocked.
+    assert_eq!(cpu.bus().ticked_cycles, 2 + 513);
+    assert_eq!(cpu.cycles, 2 + 513);
+}
+
+#[test]
+fn test_handle_nmi_ticks_bus_for_interrupt_sequence() {
+    let mut bus = SyncTestBus::new();
+    bus.memory[0xFFFA] = 0x00;
+    bus.memory[0xFFFB] = 0x06;
+    bus.memory[0xFFFC] = 0x00;
+    bus.memory[0xFFFD] = 0x04;
+    let mut cpu = Cpu::new(bus);
+
+    cpu.handle_nmi();
+
+    assert_eq!(cpu.pc, 0x0600);
+    assert_eq!(cpu.bus().ticked_cycles, 7);
+    assert_eq!(cpu.cycles, 7);
+}
+
 #[test]
 fn test_step_nes_ticks_before_ppu_status_read() {
     let mut bus = SyncTestBus::new();

@@ -125,8 +125,11 @@ impl Bus for NesBus {
                 };
             }
 
-            // Joypad strobe ($4016 write)
-            0x4016 => self.joypad1.write(val),
+            // Joypad strobe ($4016 write) — shared by both controllers
+            0x4016 => {
+                self.joypad1.write(val);
+                self.joypad2.write(val);
+            }
 
             // APU registers ($4000-$4013)
             0x4000 => self.apu.pulse1.write_reg0(val),

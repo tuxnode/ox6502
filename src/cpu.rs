@@ -39,8 +39,8 @@ impl<B: Bus> Cpu<B> {
             x: 0,
             y: 0,
             sp: 0xFD,
-            status: 0,
-            pc: 0xFFFC, // Reset vector address
+            status: 0x20, // bit 5 is always set on the NES
+            pc: 0xFFFC,   // Reset vector address
             cycles: 0,
             bus,
             cycle_sync_enabled: false,
@@ -123,8 +123,22 @@ impl<B: Bus> Cpu<B> {
         self.tick_bus_cycles(remaining_cycles);
 
         self.cycle_sync_enabled = false;
-        let tick = std::mem::take(&mut self.pending_tick);
-        self.cycles += tick.extra_cycles as u64;
+        let mut tick = std::mem::take(&mut self.pending_tick);
+
+        // OAM DMA stalls the CPU for 513/514 cycles. Keep the PPU and APU
+        // running during that time so the timing of the next frame is right.
+        if tick.extra_cycles > 0 {
+            let mut remaining = tick.extra_cycles;
+            while remaining > 0 {
+                let chunk = remaining.min(u8::MAX as u32) as u8;
+                let extra = self.bus.tick(chunk);
+                tick.nmi |= extra.nmi;
+                remaining -= chunk as u32;
+            }
+            self.cycles += tick.extra_cycles as u64;
+            tick.extra_cycles = 0;
+        }
+
         tick
     }
 
@@ -153,13 +167,22 @@ impl<B: Bus> Cpu<B> {
         self.cycle_sync_enabled = false;
         self.push((self.pc >> 8) as u8);
         self.push(self.pc as u8);
-        // NMI pushes status with B=0, unlike BRK which sets B=1
-        self.push(self.status & !FLAG_B);
+        // NMI pushes status with B=0 and the unused bit set, unlike BRK.
+        self.push((self.status & !FLAG_B) | 0x20);
         self.set_flag(FLAG_I, true);
         let lo = self.read(0xFFFA) as u16;
         let hi = self.read(0xFFFB) as u16;
         self.pc = (hi << 8) | lo;
-        self.cycles += 7;
+
+        // The interrupt sequence takes 7 CPU cycles; advance the PPU/APU too.
+        let mut remaining = 7u32;
+        while remaining > 0 {
+            let chunk = remaining.min(u8::MAX as u32) as u8;
+            self.bus.tick(chunk);
+            self.cycles += chunk as u64;
+            remaining -= chunk as u32;
+        }
+
         self.cycle_sync_enabled = sync_was_enabled;
     }
 
