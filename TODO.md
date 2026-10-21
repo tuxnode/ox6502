@@ -73,7 +73,7 @@
 - [x] 三角波通道 Triangle（linear counter, length counter）
 - [x] 噪声通道 Noise（mode flag, LFSR, length counter）
 - [x] 音频采样输出（44100 Hz, 采样混合）
-- [x] 实时音频播放（cpal）
+- [x] 实时音频播放（Linux：pulseaudio 纯 Rust 协议；macOS/Windows：cpal）
 
 ### 系统集成
 - [x] NES 主循环（CPU + PPU + APU 同步运行，60 FPS 帧率限制）

@@ -8,14 +8,11 @@ MOS 6502 / CMOS W65C02 CPU emulator with NES system emulation, written in Rust.
 
 - Rust (edition 2024)
 
-The real-time NES display uses Notan (pure-Rust windowing/rendering) and cpal
-for audio streaming. On Linux, cpal needs the ALSA development headers:
+The real-time NES display uses Notan (pure-Rust windowing/rendering). Audio on
+Linux uses the native-Rust `pulseaudio` protocol client (PulseAudio or
+PipeWire-pulse); macOS/Windows use cpal (CoreAudio/WASAPI).
 
-```bash
-sudo apt-get install libasound2-dev
-```
-
-No SDL2 installation is required.
+No SDL2 or libasound2 development packages are required.
 
 ### Build & Test
 
@@ -56,7 +53,7 @@ cargo test --lib --test cpu_tests   # excludes the SST tests, which need the Pro
 - `tests/cpu_tests.rs` — integration tests with `TestBus` (also 64KB flat array)
 - `src/main.rs` — CLI binary: loads ROM, runs CPU with trap detection, `--debug` for monitor
 - `src/bin/nes_render.rs` — offline NES frame renderer (loads .nes, runs N frames, writes PPM)
-- `src/bin/nes_notan.rs` — real-time NES display window (Notan + cpal, `frontend` feature)
+- `src/bin/nes_notan.rs` — real-time NES display window (Notan, `frontend` feature; pulseaudio on Linux, cpal on macOS/Windows)
 
 ## Key Quirks
 

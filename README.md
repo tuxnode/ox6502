@@ -25,7 +25,7 @@ cargo build
 cargo run -- tests/roms/6502_functional_test.bin
 cargo run -- tests/roms/6502_functional_test.bin --debug
 
-# NES games (Notan frontend; on Linux install libasound2-dev for audio)
+# NES games (Notan frontend)
 cargo run --features frontend --bin nes_notan -- <game.nes>
 cargo run --bin nes_render -- <game.nes> [frames]
 ```

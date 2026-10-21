@@ -20,7 +20,7 @@ cargo build
 cargo run -- tests/roms/6502_functional_test.bin
 cargo run -- tests/roms/6502_functional_test.bin --debug
 
-# NES 游戏（Notan 前端；Linux 音频需安装 libasound2-dev）
+# NES 游戏（Notan 前端）
 cargo run --features frontend --bin nes_notan -- <game.nes>
 cargo run --bin nes_render -- <game.nes> [帧数]
 ```

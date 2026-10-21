@@ -25,10 +25,10 @@ cargo test --lib --test cpu_tests   # excludes the SST tests, which need the Pro
 Dependencies:
 - `serde` + `serde_json` — SST JSON test deserialization in `tests/sst_tests.rs`
 - `notan` (v0.14, optional `frontend` feature) — real-time NES window/input
-- `cpal` (v0.18, optional `frontend` feature) — real-time audio output
+- `pulseaudio` (v0.3, Linux) — native-Rust PulseAudio/PipeWire-pulse audio output
+- `cpal` (v0.18, macOS/Windows) — CoreAudio/WASAPI audio output
 
-On Linux, install ALSA headers for cpal: `sudo apt-get install libasound2-dev`.
-No SDL2 installation is needed anymore.
+No SDL2 or libasound2 development package is needed.
 
 ## Architecture
 
@@ -49,7 +49,7 @@ No SDL2 installation is needed anymore.
 - `tests/cpu_tests.rs` — integration tests with `TestBus` (also 64KB flat array)
 - `src/main.rs` — CLI binary: loads ROM, runs CPU with trap detection, `--debug` for monitor
 - `src/bin/nes_render.rs` — offline NES frame renderer (loads .nes, runs N frames, writes PPM)
-- `src/bin/nes_notan.rs` — real-time NES display window (Notan + cpal audio)
+- `src/bin/nes_notan.rs` — real-time NES display window (Notan; pulseaudio on Linux, cpal elsewhere)
 
 ## Key Quirks
 
