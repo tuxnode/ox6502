@@ -54,7 +54,9 @@ impl NesBus {
     pub fn tick_ppu(&mut self, cpu_cycles: u8) {
         let ppu = &mut self.ppu;
         let mapper = &mut self.mapper;
-        for _ in 0..(cpu_cycles * 3) {
+        // 255 CPU cycles would overflow a u8 when multiplied by three
+        // (DMA invokes the bus with up to 255 cycles at a time).
+        for _ in 0..(cpu_cycles as u16 * 3) {
             ppu.tick_mapped(&mut |addr| mapper.ppu_read(addr));
         }
     }
@@ -221,6 +223,17 @@ mod tests {
             prg_rom: vec![0; 0x8000],
             chr_rom: vec![0; 0x2000],
         }
+    }
+
+    #[test]
+    fn tick_ppu_handles_dma_sized_cycle_chunks() {
+        let mut bus = NesBus::new(uxrom_chr_ram_cartridge());
+
+        // 255 * 3 = 765 dots: two full scanlines plus 83 dots.
+        bus.tick_ppu(255);
+
+        assert_eq!(bus.ppu.scanline(), 2);
+        assert_eq!(bus.ppu.dot(), 83);
     }
 
     #[test]
