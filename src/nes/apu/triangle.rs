@@ -81,13 +81,14 @@ impl Triangle {
         }
     }
 
-    /// Called every CPU cycle — timer decreases by 2 (double speed)
+    /// Called every CPU cycle. Unlike the pulse/noise channels the triangle
+    /// timer is clocked at the full CPU rate, not CPU/2.
     pub fn tick(&mut self) {
         if self.timer_counter == 0 {
             self.timer_counter = self.timer_period;
             self.duty_pos = (self.duty_pos + 1) & 31;
         } else {
-            self.timer_counter = self.timer_counter.saturating_sub(2);
+            self.timer_counter -= 1;
         }
     }
 
@@ -122,6 +123,24 @@ impl Triangle {
 #[cfg(test)]
 mod tests {
     use super::Triangle;
+
+    #[test]
+    fn timer_advances_once_per_period_cpu_cycles() {
+        let mut triangle = Triangle::new();
+        triangle.write_reg2(8);
+        triangle.write_reg3(0);
+
+        // The first tick loads the timer; a period of 8 must take 8 more
+        // CPU cycles before the waveform advances again.
+        for _ in 0..8 {
+            triangle.tick();
+        }
+        assert_eq!(triangle.duty_pos, 1);
+
+        triangle.tick();
+        triangle.tick();
+        assert_eq!(triangle.duty_pos, 2);
+    }
 
     #[test]
     fn write_timer_high_sets_linear_reload_flag() {

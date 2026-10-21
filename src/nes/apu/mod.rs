@@ -22,6 +22,9 @@ pub struct Apu {
     frame_mode: u8, // 0 = 4-step, 1 = 5-step
     frame_interrupt: bool,
 
+    // APU cycle divider: pulse and noise timers run at CPU/2.
+    half_cycle: bool,
+
     // Sample output
     sample_counter: u32,
     sample_buffer: Vec<f32>,
@@ -48,13 +51,15 @@ impl Apu {
             frame_mode: 0,
             frame_interrupt: false,
 
+            half_cycle: false,
+
             sample_counter: 0,
             sample_buffer: Vec::new(),
         }
     }
 
-    /// $4015 read: status register
-    pub fn read_status(&self) -> u8 {
+    /// $4015 read: status register. Reading acknowledges/clears the frame IRQ.
+    pub fn read_status(&mut self) -> u8 {
         let mut status = 0;
         if self.pulse1.enabled() {
             status |= 0x01;
@@ -72,6 +77,7 @@ impl Apu {
         if self.frame_interrupt {
             status |= 0x40;
         }
+        self.frame_interrupt = false;
         status
     }
 
@@ -97,11 +103,16 @@ impl Apu {
 
     /// Called every CPU cycle
     pub fn tick(&mut self) {
-        // Clock all channel timers
-        self.pulse1.tick();
-        self.pulse2.tick();
+        // Pulse and noise timers are clocked every APU cycle (CPU/2), while
+        // the triangle timer runs at the full CPU rate. Clocking all of them
+        // on every CPU cycle makes pulse/noise an octave too high.
+        self.half_cycle = !self.half_cycle;
+        if self.half_cycle {
+            self.pulse1.tick();
+            self.pulse2.tick();
+            self.noise.tick();
+        }
         self.triangle.tick();
-        self.noise.tick();
 
         // Frame counter (CPU cycles)
         self.frame_counter += 1;
