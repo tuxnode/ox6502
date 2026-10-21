@@ -33,7 +33,11 @@ impl Mapper for Cnrom {
     }
 
     fn cpu_write(&mut self, _addr: u16, val: u8) {
-        self.chr_bank = val & 0x03;
+        // Mask/mirror the bank number to the amount of CHR present. CNROM
+        // boards commonly have 4 banks, but 8-bank (and larger) variants
+        // exist and need more than two bits.
+        let banks = (self.chr_rom.len() / 0x2000).max(1);
+        self.chr_bank = (val as usize % banks) as u8;
     }
 
     fn ppu_read(&mut self, addr: u16) -> u8 {
@@ -151,6 +155,24 @@ mod tests {
 
         mapper.cpu_write(0x8000, 0xAA);
         assert_eq!(mapper.chr_bank, 2);
+    }
+
+    #[test]
+    fn cpu_write_can_select_banks_beyond_eight_kb_times_four() {
+        let prg = prg_rom_16kb();
+
+        // Mirror the 32KB test ROM into a 64KB (8-bank) CHR ROM and select
+        // bank 5; a two-bit mask would incorrectly clamp this to bank 1.
+        let mut chr = chr_rom_32kb();
+        chr.extend_from_slice(&chr_rom_32kb());
+        // Put a marker byte at the start of bank 5.
+        chr[5 * 0x2000] = 0x5A;
+        let mut mapper = Cnrom::new(prg, chr, Mirroring::Horizontal);
+
+        mapper.cpu_write(0x8000, 5);
+
+        assert_eq!(mapper.chr_bank, 5);
+        assert_eq!(mapper.ppu_read(0x0000), 0x5A);
     }
 
     #[test]

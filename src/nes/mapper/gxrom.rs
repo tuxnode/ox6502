@@ -29,8 +29,13 @@ impl Mapper for Gxrom {
         }
     }
     fn cpu_write(&mut self, _addr: u16, val: u8) {
-        self.chr_bank = val & 0x03;
-        self.prg_bank = (val >> 4) & 0x03;
+        // GxROM uses two bits each for the PRG (32KB) and CHR (8KB) banks.
+        // Mask them against the actual ROM size so smaller carts wrap
+        // instead of reading past the end of the data.
+        let prg_banks = (self.prg_rom.len() / 0x8000).max(1);
+        let chr_banks = (self.chr_rom.len() / 0x2000).max(1);
+        self.prg_bank = (((val >> 4) & 0x03) as usize % prg_banks) as u8;
+        self.chr_bank = ((val & 0x03) as usize % chr_banks) as u8;
     }
     fn ppu_read(&mut self, addr: u16) -> u8 {
         let bank_start = (self.chr_bank as usize) * 0x2000;
@@ -101,6 +106,19 @@ mod tests {
         mapper.cpu_write(0x8000, 0x03);
         assert_eq!(mapper.ppu_read(0x0000), 0xA3);
     }
+    #[test]
+    fn chr_bank_wraps_to_rom_size() {
+        let prg_rom = prg_rom_with_banks(2);
+        let chr_rom = chr_rom_with_banks(2);
+        let mut mapper = Gxrom::new(prg_rom, chr_rom, Mirroring::Vertical);
+
+        // Only two 8KB CHR banks exist; register value 3 must wrap to bank 1.
+        mapper.cpu_write(0x8000, 0x03);
+
+        assert_eq!(mapper.chr_bank, 1);
+        assert_eq!(mapper.ppu_read(0x0000), 0xA1);
+    }
+
     #[test]
     fn cpu_write_sets_prg_and_chr_from_one_register() {
         let prg_rom = prg_rom_with_banks(4);
