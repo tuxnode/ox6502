@@ -14,7 +14,7 @@ MOS 6502 / CMOS W65C02 CPU emulator with NES system emulation, written in Rust.
 - **NES APU**: Pulse 1/2, Triangle, Noise channels with frame counter and audio output
 - **Mappers**: NROM (0), MMC1 (1), GxROM (66)
 - **Input**: Keyboard → NES joypad mapping
-- **Display**: SDL2 real-time window (3x) or offline PPM renderer
+- **Display**: Notan real-time window (3x, pure-Rust stack) or offline PPM renderer
 
 ## Usage
 
@@ -25,8 +25,8 @@ cargo build
 cargo run -- tests/roms/6502_functional_test.bin
 cargo run -- tests/roms/6502_functional_test.bin --debug
 
-# NES games (requires SDL2: brew install sdl2)
-cargo run --bin nes_sdl -- <game.nes>
+# NES games (Notan frontend; on Linux install libasound2-dev for audio)
+cargo run --features frontend --bin nes_notan -- <game.nes>
 cargo run --bin nes_render -- <game.nes> [frames]
 ```
 

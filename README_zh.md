@@ -9,7 +9,7 @@ MOS 6502 / CMOS W65C02 CPU 模拟器，附带 NES 系统模拟，Rust 编写。
 - **NES APU**：脉冲 1/2、三角波、噪声通道，帧计数器与音频输出
 - **Mapper**：NROM（0）、MMC1（1）
 - **输入**：键盘映射为 NES 手柄
-- **显示**：SDL2 实时窗口（3x）或离线 PPM 渲染器
+- **显示**：Notan 实时窗口（3x，纯 Rust 生态）或离线 PPM 渲染器
 
 ## 构建与运行
 
@@ -20,8 +20,8 @@ cargo build
 cargo run -- tests/roms/6502_functional_test.bin
 cargo run -- tests/roms/6502_functional_test.bin --debug
 
-# NES 游戏（需安装 SDL2：brew install sdl2）
-cargo run --bin nes_sdl -- <game.nes>
+# NES 游戏（Notan 前端；Linux 音频需安装 libasound2-dev）
+cargo run --features frontend --bin nes_notan -- <game.nes>
 cargo run --bin nes_render -- <game.nes> [帧数]
 ```
 

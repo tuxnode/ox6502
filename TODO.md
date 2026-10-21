@@ -73,11 +73,11 @@
 - [x] 三角波通道 Triangle（linear counter, length counter）
 - [x] 噪声通道 Noise（mode flag, LFSR, length counter）
 - [x] 音频采样输出（44100 Hz, 采样混合）
-- [x] SDL2 音频播放（AudioQueue）
+- [x] 实时音频播放（cpal）
 
 ### 系统集成
 - [x] NES 主循环（CPU + PPU + APU 同步运行，60 FPS 帧率限制）
-- [x] SDL2 实时显示窗口（3x 缩放，Esc 退出）
+- [x] Notan 实时显示窗口（3x 缩放，Esc 退出）
 - [x] 离线 PPM 渲染器（nes_render）
 - [x] .nes 文件加载（iNES 格式）
 

@@ -124,7 +124,7 @@ impl Apu {
 
         // Collect samples. Use a fractional accumulator: CPU_FREQ is not an
         // integer multiple of SAMPLE_RATE, and dividing first produced
-        // 44744 Hz instead of the 44100 Hz the SDL audio device expects.
+        // 44744 Hz instead of the 44100 Hz the audio device expects.
         self.sample_counter += SAMPLE_RATE;
         if self.sample_counter >= CPU_FREQ {
             self.sample_counter -= CPU_FREQ;

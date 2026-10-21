@@ -10,7 +10,7 @@ cargo test           # run all unit + integration tests
 cargo run -- tests/roms/6502_functional_test.bin   # run Klaus Dormann 6502 test ROM
 cargo run -- tests/roms/65C02_extended_opcodes_test.bin   # run 65C02 extended test
 cargo run -- tests/roms/6502_functional_test.bin --debug   # interactive monitor
-cargo run --bin nes_sdl -- <game.nes>            # NES real-time display (SDL2)
+cargo run --features frontend --bin nes_notan -- <game.nes>   # NES real-time display (Notan)
 cargo run --bin nes_render -- <game.nes>         # NES offline frame → PPM
 ```
 
@@ -24,9 +24,11 @@ cargo test --lib --test cpu_tests   # excludes the SST tests, which need the Pro
 
 Dependencies:
 - `serde` + `serde_json` — SST JSON test deserialization in `tests/sst_tests.rs`
-- `sdl2` (v0.38) — real-time NES display window (`nes_sdl` binary only)
+- `notan` (v0.14, optional `frontend` feature) — real-time NES window/input
+- `cpal` (v0.18, optional `frontend` feature) — real-time audio output
 
-On macOS, install SDL2 via Homebrew: `brew install sdl2`
+On Linux, install ALSA headers for cpal: `sudo apt-get install libasound2-dev`.
+No SDL2 installation is needed anymore.
 
 ## Architecture
 
@@ -47,7 +49,7 @@ On macOS, install SDL2 via Homebrew: `brew install sdl2`
 - `tests/cpu_tests.rs` — integration tests with `TestBus` (also 64KB flat array)
 - `src/main.rs` — CLI binary: loads ROM, runs CPU with trap detection, `--debug` for monitor
 - `src/bin/nes_render.rs` — offline NES frame renderer (loads .nes, runs N frames, writes PPM)
-- `src/bin/nes_sdl.rs` — real-time NES display window (requires SDL2)
+- `src/bin/nes_notan.rs` — real-time NES display window (Notan + cpal audio)
 
 ## Key Quirks
 

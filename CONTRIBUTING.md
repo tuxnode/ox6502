@@ -7,12 +7,15 @@ MOS 6502 / CMOS W65C02 CPU emulator with NES system emulation, written in Rust.
 ### Prerequisites
 
 - Rust (edition 2024)
-- SDL2 (for NES real-time display)
 
-On macOS:
+The real-time NES display uses Notan (pure-Rust windowing/rendering) and cpal
+for audio streaming. On Linux, cpal needs the ALSA development headers:
+
 ```bash
-brew install sdl2
+sudo apt-get install libasound2-dev
 ```
+
+No SDL2 installation is required.
 
 ### Build & Test
 
@@ -22,7 +25,7 @@ cargo test           # run all unit + integration tests
 cargo run -- tests/roms/6502_functional_test.bin   # run Klaus Dormann 6502 test ROM
 cargo run -- tests/roms/65C02_extended_opcodes_test.bin   # run 65C02 extended test
 cargo run -- tests/roms/6502_functional_test.bin --debug   # interactive monitor
-cargo run --bin nes_sdl -- <game.nes>            # NES real-time display (SDL2)
+cargo run --features frontend --bin nes_notan -- <game.nes>   # NES real-time display (Notan)
 cargo run --bin nes_render -- <game.nes>         # NES offline frame → PPM
 ```
 
@@ -53,7 +56,7 @@ cargo test --lib --test cpu_tests   # excludes the SST tests, which need the Pro
 - `tests/cpu_tests.rs` — integration tests with `TestBus` (also 64KB flat array)
 - `src/main.rs` — CLI binary: loads ROM, runs CPU with trap detection, `--debug` for monitor
 - `src/bin/nes_render.rs` — offline NES frame renderer (loads .nes, runs N frames, writes PPM)
-- `src/bin/nes_sdl.rs` — real-time NES display window (requires SDL2)
+- `src/bin/nes_notan.rs` — real-time NES display window (Notan + cpal, `frontend` feature)
 
 ## Key Quirks
 
