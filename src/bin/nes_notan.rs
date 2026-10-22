@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use notan::draw::*;
 use notan::prelude::*;
@@ -13,6 +14,13 @@ const NES_WIDTH: u32 = 256;
 const NES_HEIGHT: u32 = 240;
 const SCALE: u32 = 3;
 const APU_SAMPLE_RATE: u32 = 44100;
+/// NTSC NES frame rate (89342 PPU dots per frame ≈ 60.0988 Hz).
+const NES_FPS: f64 = 60.098_8;
+/// Keep roughly 50 ms of audio queued. This absorbs scheduler/device jitter
+/// while keeping latency low enough for games.
+const AUDIO_TARGET_SAMPLES: usize = 2205;
+/// Hard limit; beyond this latency would be noticeable, so drop old audio.
+const AUDIO_MAX_SAMPLES: usize = AUDIO_TARGET_SAMPLES * 3;
 
 /// Linux: stream to PulseAudio/PipeWire-pulse using a native-Rust
 /// implementation of the PulseAudio protocol. This avoids linking
@@ -33,7 +41,7 @@ impl AudioSink {
         };
 
         let client = pulseaudio::Client::from_env(c"ox6502").ok()?;
-        let params = PlaybackStreamParams {
+        let mut params = PlaybackStreamParams {
             sample_spec: SampleSpec {
                 format: SampleFormat::S16Le,
                 channels: 1,
@@ -44,6 +52,12 @@ impl AudioSink {
             cvolume: Some(ChannelVolume::norm(1)),
             ..Default::default()
         };
+        // Ask for small (~23 ms) server-side requests instead of PulseAudio's
+        // ~2 second default. This keeps the client queue short and stable.
+        params.buffer_attr.max_length = 8192;
+        params.buffer_attr.target_length = 2048;
+        params.buffer_attr.pre_buffering = 2048;
+        params.buffer_attr.minimum_request_length = 512;
 
         let queue = Arc::new(Mutex::new(VecDeque::with_capacity(8192)));
         let callback_queue = Arc::clone(&queue);
@@ -70,13 +84,18 @@ impl AudioSink {
 
     fn push(&self, samples: &[f32]) {
         let mut queue = self.queue.lock().unwrap();
-        if queue.len() < APU_SAMPLE_RATE as usize {
-            queue.extend(
-                samples
-                    .iter()
-                    .map(|s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16),
-            );
+        queue.extend(
+            samples
+                .iter()
+                .map(|s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16),
+        );
+        while queue.len() > AUDIO_MAX_SAMPLES {
+            queue.pop_front();
         }
+    }
+
+    fn buffered_samples(&self) -> usize {
+        self.queue.lock().unwrap().len()
     }
 }
 
@@ -139,10 +158,14 @@ impl AudioSink {
 
     fn push(&self, samples: &[f32]) {
         let mut queue = self.queue.lock().unwrap();
-        // Never let a stalled device make the queue grow without bound.
-        if queue.len() < APU_SAMPLE_RATE as usize {
-            queue.extend(samples.iter().copied());
+        queue.extend(samples.iter().copied());
+        while queue.len() > AUDIO_MAX_SAMPLES {
+            queue.pop_front();
         }
+    }
+
+    fn buffered_samples(&self) -> usize {
+        self.queue.lock().unwrap().len()
     }
 }
 
@@ -193,6 +216,10 @@ struct NesApp {
     texture: Texture,
     rgba: Vec<u8>,
     audio: Option<AudioSink>,
+    last_update: Instant,
+    frame_accumulator: f64,
+    smoothed_buffer: f64,
+    primed: bool,
 }
 
 impl NesApp {
@@ -212,6 +239,76 @@ impl NesApp {
             texture,
             rgba,
             audio: AudioSink::new(),
+            last_update: Instant::now(),
+            frame_accumulator: 0.0,
+            smoothed_buffer: AUDIO_TARGET_SAMPLES as f64,
+            primed: false,
+        }
+    }
+
+    /// Fill the audio queue before regular playback starts, otherwise the
+    /// first few seconds would run with an empty buffer and crackle.
+    fn prime_audio(&mut self) {
+        if self.audio.is_some() {
+            while self
+                .audio
+                .as_ref()
+                .is_some_and(|a| a.buffered_samples() < AUDIO_TARGET_SAMPLES)
+            {
+                self.run_frame();
+            }
+            if let Some(audio) = &self.audio {
+                self.smoothed_buffer = audio.buffered_samples() as f64;
+            }
+        } else {
+            self.run_frame();
+        }
+
+        self.primed = true;
+        self.frame_accumulator = 0.0;
+        self.last_update = Instant::now();
+    }
+
+    /// Advance emulation based on wall-clock time, not display refresh rate.
+    /// The audio queue level trims the emulation rate slightly so the sound
+    /// device and the emulated console cannot drift apart over time.
+    fn advance(&mut self) {
+        if !self.primed {
+            self.prime_audio();
+            return;
+        }
+
+        let now = Instant::now();
+        let since_last = now.duration_since(self.last_update).as_secs_f64();
+        self.last_update = now;
+
+        // After the window was stalled/minimized the audio queue has drained.
+        // Refill it instead of trying to catch up on several frames at once.
+        if since_last > 0.25 {
+            self.prime_audio();
+            return;
+        }
+
+        let elapsed = since_last.min(0.1);
+
+        let mut rate = NES_FPS;
+        if let Some(buffered) = self.audio.as_ref().map(AudioSink::buffered_samples) {
+            self.smoothed_buffer = self.smoothed_buffer * 0.9 + buffered as f64 * 0.1;
+            let error =
+                (self.smoothed_buffer - AUDIO_TARGET_SAMPLES as f64) / AUDIO_TARGET_SAMPLES as f64;
+            // ±0.5% is inaudible, but enough to correct clock drift.
+            rate *= 1.0 - (error * 0.02).clamp(-0.005, 0.005);
+        }
+
+        self.frame_accumulator += elapsed * rate;
+        // Avoid a burst of catch-up frames after the window was stalled.
+        self.frame_accumulator = self.frame_accumulator.min(3.0);
+
+        let mut ran = 0;
+        while self.frame_accumulator >= 1.0 && ran < 3 {
+            self.run_frame();
+            self.frame_accumulator -= 1.0;
+            ran += 1;
         }
     }
 
@@ -288,7 +385,7 @@ fn update(app: &mut App, state: &mut NesApp) {
             .set_button(bit, app.keyboard.is_down(key));
     }
 
-    state.run_frame();
+    state.advance();
 }
 
 fn draw(gfx: &mut Graphics, state: &mut NesApp) {
