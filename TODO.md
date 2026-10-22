@@ -65,6 +65,9 @@
 - [x] NMI 时序（scanline 241 触发，scanline 262 清除）
 - [x] Mapper trait + NROM（mapper 0）
 - [x] MMC1（mapper 1）— bank switching + 可切换镜像
+- [x] MMC3（mapper 4）— PRG/CHR banking、可切换镜像、扫描线 IRQ
+- [x] UxROM（mapper 2）/ CNROM（mapper 3）/ GxROM（mapper 66）
+- [x] CPU 可屏蔽 IRQ（$FFFE/$FFFF 向量）
 - [x] 游戏手柄输入（$4016/$4017，键盘映射）
 
 ### APU

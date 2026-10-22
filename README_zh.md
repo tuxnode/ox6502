@@ -7,7 +7,7 @@ MOS 6502 / CMOS W65C02 CPU 模拟器，附带 NES 系统模拟，Rust 编写。
 - **CPU**：完整 6502/65C02 指令集，247/256 NMOS 非法操作码（SST 通过率 96.5%），全部 13 种寻址模式，交互式调试器
 - **NES PPU**：背景 + 精灵渲染，loopy 地址系统，OAM DMA，NMI 时序
 - **NES APU**：脉冲 1/2、三角波、噪声通道，帧计数器与音频输出
-- **Mapper**：NROM（0）、MMC1（1）
+- **Mapper**：NROM（0）、MMC1（1）、UxROM（2）、CNROM（3）、MMC3（4）、GxROM（66）
 - **输入**：键盘映射为 NES 手柄
 - **显示**：Notan 实时窗口（3x，纯 Rust 生态）或离线 PPM 渲染器
 

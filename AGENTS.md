@@ -43,6 +43,7 @@ No SDL2 or libasound2 development package is needed.
 - `src/nes/ppu.rs` — PPU registers ($2000-$2007), loopy address system, tick timing, background+sprite rendering, frame buffer
 - `src/nes/palette.rs` — NTSC 64-color system palette table
 - `src/nes/mapper/nrom.rs` — NROM (mapper 0) stub
+- `src/nes/mapper/mmc3.rs` — MMC3 (mapper 4): PRG/CHR banking, mirroring, scanline IRQ
 - `src/monitor/mod.rs` — interactive debugger REPL (Monitor struct, run loop)
 - `src/monitor/commands.rs` — command parsing, execution, all monitor commands
 - `src/monitor/disass.rs` — disassembler (lookup table + disassemble_at)
@@ -64,6 +65,7 @@ No SDL2 or libasound2 development package is needed.
 - `Cpu` is generic over `Bus` — use `TestBus` in tests, `SimpleBus` for CLI. Don't couple CPU to a concrete bus.
 - **PPU timing**: 1 CPU cycle = 3 PPU dots. `Bus::tick(cpu_cycles)` advances PPU by `cpu_cycles * 3` dots.
 - **NMI is non-maskable**: I flag does not block NMI (unlike IRQ). `tick()` signals NMI via `TickResult.nmi`.
+- **MMC3 IRQ**: the mapper counts PPU A12 rising edges (clocked at dot 260); the level-sensitive IRQ line is reported via `TickResult.irq` and serviced by `step_nes()` through `$FFFE/$FFFF` when the I flag is clear.
 - **Background rendering**: Decodes nametable → attribute table → pattern table, writes 256×240 RGB frame buffer.
 - **Sprite rendering**: OAM decode, horizontal/vertical flip, priority-behind-background (attr bit 5), sprite palette at `palette[0x11..0x1F]`.
 
