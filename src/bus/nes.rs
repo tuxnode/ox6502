@@ -50,6 +50,14 @@ impl NesBus {
         self.ppu.take_nmi()
     }
 
+    /// MMC3 also clocks its IRQ counter on PPU A12 rising edges caused by
+    /// CPU accesses to $2006/$2007, even while rendering is disabled.
+    fn clock_ppu_a12(&mut self, v_before: u16) {
+        if v_before & 0x1000 == 0 && self.ppu.vram_addr() & 0x1000 != 0 {
+            self.mapper.clock_scanline();
+        }
+    }
+
     /// Advance PPU by the given number of CPU cycles (1 CPU cycle = 3 PPU dots)
     pub fn tick_ppu(&mut self, cpu_cycles: u8) {
         let ppu = &mut self.ppu;
@@ -58,6 +66,16 @@ impl NesBus {
         // (DMA invokes the bus with up to 255 cycles at a time).
         for _ in 0..(cpu_cycles as u16 * 3) {
             ppu.tick_mapped(&mut |addr| mapper.ppu_read(addr));
+
+            // MMC3's IRQ counter is clocked by the PPU A12 rising edge that
+            // occurs during sprite pattern fetches (dot 260). Rendering on
+            // scanlines 0-239 and the pre-render line produces that edge.
+            if ppu.dot() == 260
+                && ppu.rendering_enabled()
+                && (ppu.scanline() < 240 || ppu.scanline() == 261)
+            {
+                mapper.clock_scanline();
+            }
         }
     }
 }
@@ -70,9 +88,13 @@ impl Bus for NesBus {
 
             // PPU registers: 8 bytes, mirrored every 8 bytes up to $3FFF
             0x2000..=0x3FFF => {
+                let v_before = self.ppu.vram_addr();
                 let mapper = &mut self.mapper;
-                self.ppu
-                    .read_register_mapped(addr, &mut |ppu_addr| mapper.ppu_read(ppu_addr))
+                let value = self
+                    .ppu
+                    .read_register_mapped(addr, &mut |ppu_addr| mapper.ppu_read(ppu_addr));
+                self.clock_ppu_a12(v_before);
+                value
             }
 
             // Joypad 1 ($4016)
@@ -103,11 +125,13 @@ impl Bus for NesBus {
 
             // PPU registers
             0x2000..=0x3FFF => {
+                let v_before = self.ppu.vram_addr();
                 let mapper = &mut self.mapper;
                 self.ppu
                     .write_register_mapped(addr, val, &mut |ppu_addr, ppu_val| {
                         mapper.ppu_write(ppu_addr, ppu_val);
                     });
+                self.clock_ppu_a12(v_before);
             }
 
             // OAM DMA: writing page number triggers 256-byte copy
@@ -202,6 +226,7 @@ impl Bus for NesBus {
         TickResult {
             extra_cycles: self.take_dma_cycles(),
             nmi,
+            irq: self.mapper.irq_pending(),
         }
     }
 }
@@ -223,6 +248,33 @@ mod tests {
             prg_rom: vec![0; 0x8000],
             chr_rom: vec![0; 0x2000],
         }
+    }
+
+    fn mmc3_cartridge() -> Cartridge {
+        Cartridge {
+            mapper: 4,
+            mirroring: Mirroring::Horizontal,
+            battery: false,
+            trainer: false,
+            prg_rom: vec![0; 0x8000],
+            chr_rom: vec![0; 0x2000],
+        }
+    }
+
+    #[test]
+    fn mmc3_irq_is_clocked_by_ppu_scanlines() {
+        let mut bus = NesBus::new(mmc3_cartridge());
+        bus.cpu_write(0xC000, 1); // IRQ latch
+        bus.cpu_write(0xC001, 0); // reload
+        bus.cpu_write(0xE001, 0); // enable
+        bus.cpu_write(0x2001, 0x08); // show background
+
+        // 765 dots cross dot 260 of scanline 0 (reload) and scanline 1
+        // (count down to zero), so the mapper IRQ is now pending.
+        bus.tick_ppu(255);
+        let tick = bus.tick(1);
+
+        assert!(tick.irq);
     }
 
     #[test]

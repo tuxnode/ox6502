@@ -131,11 +131,77 @@ impl Bus for DmaTestBus {
             ox6502::bus::TickResult {
                 extra_cycles: extra,
                 nmi: false,
+                irq: false,
             }
         } else {
             ox6502::bus::TickResult::default()
         }
     }
+}
+
+struct IrqTestBus {
+    memory: [u8; 0x10000],
+    irq: bool,
+}
+
+impl Bus for IrqTestBus {
+    fn cpu_read(&mut self, addr: u16) -> u8 {
+        self.memory[addr as usize]
+    }
+
+    fn cpu_write(&mut self, addr: u16, val: u8) {
+        self.memory[addr as usize] = val;
+    }
+
+    fn ppu_read(&mut self, _addr: u16) -> u8 {
+        0
+    }
+
+    fn ppu_write(&mut self, _addr: u16, _val: u8) {}
+
+    fn tick(&mut self, _cpu_cycles: u8) -> ox6502::bus::TickResult {
+        ox6502::bus::TickResult {
+            irq: self.irq,
+            ..Default::default()
+        }
+    }
+}
+
+#[test]
+fn test_mapper_irq_is_taken_when_i_flag_is_clear() {
+    let mut bus = IrqTestBus {
+        memory: [0; 0x10000],
+        irq: true,
+    };
+    bus.memory[0x0400] = CLI;
+    bus.memory[0xFFFC] = 0x00;
+    bus.memory[0xFFFD] = 0x04;
+    bus.memory[0xFFFE] = 0x00;
+    bus.memory[0xFFFF] = 0x06;
+    let mut cpu = Cpu::new(bus);
+
+    cpu.step_nes(); // CLI clears I, then the pending IRQ is serviced
+
+    assert_eq!(cpu.pc, 0x0600);
+    assert!(cpu.get_flag(FLAG_I));
+}
+
+#[test]
+fn test_mapper_irq_is_masked_by_i_flag() {
+    let mut bus = IrqTestBus {
+        memory: [0; 0x10000],
+        irq: true,
+    };
+    bus.memory[0x0400] = NOP;
+    bus.memory[0xFFFC] = 0x00;
+    bus.memory[0xFFFD] = 0x04;
+    bus.memory[0xFFFE] = 0x00;
+    bus.memory[0xFFFF] = 0x06;
+    let mut cpu = Cpu::new(bus);
+
+    cpu.step_nes(); // reset leaves I set
+
+    assert_eq!(cpu.pc, 0x0401);
 }
 
 #[test]

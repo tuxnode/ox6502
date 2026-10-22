@@ -16,6 +16,8 @@ pub trait Bus {
 pub struct TickResult {
     pub extra_cycles: u32,
     pub nmi: bool,
+    /// Mapper IRQ line is asserted (MMC3), subject to the CPU I flag.
+    pub irq: bool,
 }
 
 pub mod nes;

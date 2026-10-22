@@ -108,6 +108,8 @@ impl<B: Bus> Cpu<B> {
             .extra_cycles
             .saturating_add(tick.extra_cycles);
         self.pending_tick.nmi |= tick.nmi;
+        // IRQ is level-sensitive: the last sampled state is what matters.
+        self.pending_tick.irq = tick.irq;
     }
 
     /// NES-specific single instruction step with CPU/PPU bus-cycle synchronization.
@@ -133,10 +135,18 @@ impl<B: Bus> Cpu<B> {
                 let chunk = remaining.min(u8::MAX as u32) as u8;
                 let extra = self.bus.tick(chunk);
                 tick.nmi |= extra.nmi;
+                tick.irq = extra.irq;
                 remaining -= chunk as u32;
             }
             self.cycles += tick.extra_cycles as u64;
             tick.extra_cycles = 0;
+        }
+
+        // IRQ is maskable. NMI has priority if both are pending; the mapper
+        // IRQ line stays asserted until the handler acknowledges it.
+        if tick.irq && !tick.nmi && !self.get_flag(FLAG_I) {
+            self.handle_irq();
+            tick.irq = false;
         }
 
         tick
@@ -161,17 +171,26 @@ impl<B: Bus> Cpu<B> {
         self.update_nz(result);
     }
 
-    /// Handle NMI interrupt (similar to BRK but uses $FFFA-$FFFB vector)
+    /// Handle NMI interrupt (uses the $FFFA-$FFFB vector)
     pub fn handle_nmi(&mut self) {
+        self.interrupt(0xFFFA);
+    }
+
+    /// Handle a maskable IRQ (uses the $FFFE-$FFFF vector)
+    pub fn handle_irq(&mut self) {
+        self.interrupt(0xFFFE);
+    }
+
+    fn interrupt(&mut self, vector: u16) {
         let sync_was_enabled = self.cycle_sync_enabled;
         self.cycle_sync_enabled = false;
         self.push((self.pc >> 8) as u8);
         self.push(self.pc as u8);
-        // NMI pushes status with B=0 and the unused bit set, unlike BRK.
+        // Interrupts push status with B=0 and the unused bit set, unlike BRK.
         self.push((self.status & !FLAG_B) | 0x20);
         self.set_flag(FLAG_I, true);
-        let lo = self.read(0xFFFA) as u16;
-        let hi = self.read(0xFFFB) as u16;
+        let lo = self.read(vector) as u16;
+        let hi = self.read(vector.wrapping_add(1)) as u16;
         self.pc = (hi << 8) | lo;
 
         // The interrupt sequence takes 7 CPU cycles; advance the PPU/APU too.
