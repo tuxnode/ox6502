@@ -22,6 +22,10 @@ cargo check --all-targets
 cargo test --lib --test cpu_tests   # excludes the SST tests, which need the ProcessorTests submodule
 ```
 
+`.github/workflows/release.yml` runs on `v*` tags and ships `ox6502`, `nes_render`
+and `nes_notan` for Linux (x86_64 + aarch64), Windows (x86_64) and macOS
+(x86_64 on `macos-15-intel`, arm64 on `macos-15`).
+
 Dependencies:
 - `serde` + `serde_json` — SST JSON test deserialization in `tests/sst_tests.rs`
 - `notan` (v0.14, optional `frontend` feature) — real-time NES window/input

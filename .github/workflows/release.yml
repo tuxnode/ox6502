@@ -29,6 +29,16 @@ jobs:
             os: windows-latest
             archive: zip
             frontend: true
+          # macOS 13 images were retired in Dec 2025, so Intel is pinned to
+          # macos-15-intel and Apple Silicon runs on the arm64 macos-15 image.
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+            archive: tar.gz
+            frontend: true
+          - target: aarch64-apple-darwin
+            os: macos-15
+            archive: tar.gz
+            frontend: true
 
     steps:
       - uses: actions/checkout@v4
