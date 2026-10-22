@@ -1,3 +1,8 @@
 [env]
 LIBRARY_PATH = "/opt/homebrew/lib"
 PKG_CONFIG_PATH = "/opt/homebrew/lib/pkgconfig"
+# notan's `glsl-to-spirv` feature builds the 2017-era glslang sources, whose
+# CMakeLists still declare `cmake_minimum_required(VERSION 2.8.12)`. CMake 4.x
+# rejects anything below 3.5, so restore the compatibility floor. Without this
+# the build script fails with "Compatibility with CMake < 3.5 has been removed".
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"

@@ -30,6 +30,10 @@ Dependencies:
 
 No SDL2 or libasound2 development package is needed.
 
+`.cargo/config.toml` sets `CMAKE_POLICY_VERSION_MINIMUM=3.5` for build scripts.
+notan's `glsl-to-spirv` feature compiles 2017-era glslang sources whose
+`CMakeLists.txt` asks for CMake 2.8; CMake 4.x refuses anything below 3.5.
+
 ## Architecture
 
 - `src/cpu.rs` — `Cpu<B: Bus>` struct, registers, fetch/read/write, stack ops
