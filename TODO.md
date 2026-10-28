@@ -42,7 +42,7 @@
 - [x] CMOS 指令映射为 NMOS 行为（STZ/BRA/PHX/PHY/PLX/PLY/INC A/DEC A → NOP）
 
 ### 交互式监视器
-- [x] 反汇编器（lookup 表 + disassemble_at）
+- [x] 反汇编器（Capstone 65C02 引擎 + disassemble_at）
 - [x] 命令解析和分发
 - [x] 单步执行 + 寄存器显示
 - [x] 继续执行 + 断点检测

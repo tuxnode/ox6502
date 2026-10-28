@@ -9,7 +9,7 @@ MOS 6502 / CMOS W65C02 CPU emulator with NES system emulation, written in Rust.
 
 ## Features
 
-- **CPU**: Full 6502/65C02 instruction set, 247/256 NMOS illegal opcodes (SST 96.5%), all 13 addressing modes, page-crossing cycle penalties, interactive debugger
+- **CPU**: Full 6502/65C02 instruction set, 247/256 NMOS illegal opcodes (SST 96.5%), all 13 addressing modes, page-crossing cycle penalties, interactive debugger with Capstone disassembly
 - **NES PPU**: Background + sprite rendering, loopy address system, OAM DMA, NMI timing
 - **NES APU**: Pulse 1/2, Triangle, Noise channels with frame counter and audio output
 - **Mappers**: NROM (0), MMC1 (1), UxROM (2), CNROM (3), MMC3 (4), GxROM (66)

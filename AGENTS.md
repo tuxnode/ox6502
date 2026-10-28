@@ -28,6 +28,7 @@ and `nes_notan` for Linux (x86_64 + aarch64), Windows (x86_64) and macOS
 
 Dependencies:
 - `serde` + `serde_json` — SST JSON test deserialization in `tests/sst_tests.rs`
+- `capstone` (v0.14) — 65C02 disassembly in the monitor
 - `notan` (v0.14, optional `frontend` feature) — real-time NES window/input
 - `pulseaudio` (v0.3, Linux) — native-Rust PulseAudio/PipeWire-pulse audio output
 - `cpal` (v0.18, macOS/Windows) — CoreAudio/WASAPI audio output
@@ -54,7 +55,7 @@ notan's `glsl-to-spirv` feature compiles 2017-era glslang sources whose
 - `src/nes/mapper/mmc3.rs` — MMC3 (mapper 4): PRG/CHR banking, mirroring, scanline IRQ
 - `src/monitor/mod.rs` — interactive debugger REPL (Monitor struct, run loop)
 - `src/monitor/commands.rs` — command parsing, execution, all monitor commands
-- `src/monitor/disass.rs` — disassembler (lookup table + disassemble_at)
+- `src/monitor/disass.rs` — Capstone 65C02 disassembler (`disassemble_at`)
 - `tests/cpu_tests.rs` — integration tests with `TestBus` (also 64KB flat array)
 - `src/main.rs` — CLI binary: loads ROM, runs CPU with trap detection, `--debug` for monitor
 - `src/bin/nes_render.rs` — offline NES frame renderer (loads .nes, runs N frames, writes PPM)

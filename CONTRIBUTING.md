@@ -49,7 +49,7 @@ cargo test --lib --test cpu_tests   # excludes the SST tests, which need the Pro
 - `src/nes/mapper/nrom.rs` — NROM (mapper 0) stub
 - `src/monitor/mod.rs` — interactive debugger REPL (Monitor struct, run loop)
 - `src/monitor/commands.rs` — command parsing, execution, all monitor commands
-- `src/monitor/disass.rs` — disassembler (lookup table + disassemble_at)
+- `src/monitor/disass.rs` — Capstone 65C02 disassembler (`disassemble_at`)
 - `tests/cpu_tests.rs` — integration tests with `TestBus` (also 64KB flat array)
 - `src/main.rs` — CLI binary: loads ROM, runs CPU with trap detection, `--debug` for monitor
 - `src/bin/nes_render.rs` — offline NES frame renderer (loads .nes, runs N frames, writes PPM)
