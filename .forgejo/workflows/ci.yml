@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check & Test
+    runs-on: codeberg-medium
+    steps:
+      - name: Checkout
+        uses: https://data.forgejo.org/actions/checkout@v4
+
+      - name: Install Rust
+        uses: https://github.com/dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache cargo
+        uses: https://github.com/Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Check
+        run: cargo check --all-targets --locked
+
+      - name: Check real-time frontend
+        run: cargo check --bin nes_notan --features frontend --locked
+
+      # The SST instruction-set tests need the large ProcessorTests submodule,
+      # so CI runs only the project's own unit and integration tests.
+      - name: Test
+        run: cargo test --lib --test cpu_tests --locked

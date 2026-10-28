@@ -14,7 +14,7 @@ cargo run --features frontend --bin nes_notan -- <game.nes>   # NES real-time di
 cargo run --bin nes_render -- <game.nes>         # NES offline frame → PPM
 ```
 
-No dev-dependencies, no formatter/linter config. CI (`.github/workflows/ci.yml`) runs on every push and pull request: `cargo fmt --check`, `cargo check --all-targets`, and the project's own tests. To reproduce locally:
+No dev-dependencies, no formatter/linter config. CI runs on every push and pull request: `cargo fmt --check`, `cargo check --all-targets`, and the project's own tests. The same checks live in `.github/workflows/ci.yml` (GitHub) and `.forgejo/workflows/ci.yml` (Codeberg). To reproduce locally:
 
 ```bash
 cargo fmt --all -- --check
