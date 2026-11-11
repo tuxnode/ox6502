@@ -12,7 +12,8 @@ The real-time NES display uses Notan (pure-Rust windowing/rendering). Audio on
 Linux uses the native-Rust `pulseaudio` protocol client (PulseAudio or
 PipeWire-pulse); macOS/Windows use cpal (CoreAudio/WASAPI).
 
-No SDL2 or libasound2 development packages are required.
+No SDL2 or libasound2 development packages are required. Building the
+`frontend` feature requires CMake for notan's bundled glslang.
 
 ### Build & Test
 

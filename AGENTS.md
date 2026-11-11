@@ -33,7 +33,9 @@ Dependencies:
 - `pulseaudio` (v0.3, Linux) — native-Rust PulseAudio/PipeWire-pulse audio output
 - `cpal` (v0.18, macOS/Windows) — CoreAudio/WASAPI audio output
 
-No SDL2 or libasound2 development package is needed.
+No SDL2 or libasound2 development package is needed. Building the `frontend`
+feature requires CMake, which notan's `glsl-to-spirv` feature uses to compile
+the bundled glslang sources.
 
 `.cargo/config.toml` sets `CMAKE_POLICY_VERSION_MINIMUM=3.5` for build scripts.
 notan's `glsl-to-spirv` feature compiles 2017-era glslang sources whose

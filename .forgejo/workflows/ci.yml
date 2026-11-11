@@ -30,6 +30,13 @@ jobs:
       - name: Check
         run: cargo check --all-targets --locked
 
+      # notan's `glsl-to-spirv` feature compiles its bundled glslang with
+      # CMake. The Codeberg runner image does not ship CMake.
+      - name: Install CMake
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake
+
       - name: Check real-time frontend
         run: cargo check --bin nes_notan --features frontend --locked
 
